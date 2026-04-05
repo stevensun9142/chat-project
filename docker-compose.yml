@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: chat-postgres
+    environment:
+      POSTGRES_USER: chat
+      POSTGRES_PASSWORD: chat_secret
+      POSTGRES_DB: chat_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema/postgres/init.sql:/docker-entrypoint-initdb.d/01_init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chat -d chat_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  cassandra:
+    image: cassandra:4.1
+    container_name: chat-cassandra
+    environment:
+      CASSANDRA_CLUSTER_NAME: chat_cluster
+      CASSANDRA_DC: dc1
+      CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
+    ports:
+      - "9042:9042"
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'describe cluster'"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres_data:
+  cassandra_data:
