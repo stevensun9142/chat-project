@@ -17,6 +17,7 @@ async def _setup_teardown():
     pool = await get_pool()
     yield
     # Clean up in dependency order
+    await pool.execute("DELETE FROM refresh_tokens")
     await pool.execute("DELETE FROM room_members")
     await pool.execute("DELETE FROM rooms")
     await pool.execute("DELETE FROM users")
@@ -41,7 +42,7 @@ async def test_create_and_get_user():
 @pytest.mark.asyncio
 async def test_create_room_auto_joins_creator():
     user = await user_db.create_user("bob", "bob@example.com", "hashed_pw")
-    room = await room_db.create_room("general", user.id)
+    room = await room_db.create_room("general", user.id, [])
     assert room.name == "general"
 
     members = await room_db.get_room_members(room.id)
@@ -57,9 +58,9 @@ async def test_create_room_auto_joins_creator():
 async def test_join_and_leave_room():
     alice = await user_db.create_user("alice2", "alice2@example.com", "hashed_pw")
     bob = await user_db.create_user("bob2", "bob2@example.com", "hashed_pw")
-    room = await room_db.create_room("dev", alice.id)
+    room = await room_db.create_room("dev", alice.id, [])
 
-    await room_db.join_room(room.id, bob.id)
+    await room_db.add_members(room.id, [bob.id])
     members = await room_db.get_room_members(room.id)
     assert len(members) == 2
 
@@ -72,9 +73,9 @@ async def test_join_and_leave_room():
 @pytest.mark.asyncio
 async def test_duplicate_join_is_idempotent():
     user = await user_db.create_user("charlie", "charlie@example.com", "hashed_pw")
-    room = await room_db.create_room("random", user.id)
+    room = await room_db.create_room("random", user.id, [])
 
-    # Join again — should not raise
-    await room_db.join_room(room.id, user.id)
+    # Add again — should not raise
+    await room_db.add_members(room.id, [user.id])
     members = await room_db.get_room_members(room.id)
     assert len(members) == 1

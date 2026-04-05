@@ -4,7 +4,7 @@ from app.dao.postgres.pool import get_pool
 from app.models import Room, RoomMember
 
 
-async def create_room(name: str, created_by: UUID) -> Room:
+async def create_room(name: str, created_by: UUID, member_ids: list[UUID]) -> Room:
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -16,10 +16,11 @@ async def create_room(name: str, created_by: UUID) -> Room:
                 """,
                 name, created_by,
             )
-            # Auto-join the creator
-            await conn.execute(
+            room_id = row["id"]
+            all_members = {created_by} | set(member_ids)
+            await conn.executemany(
                 "INSERT INTO room_members (room_id, user_id) VALUES ($1, $2)",
-                row["id"], created_by,
+                [(room_id, uid) for uid in all_members],
             )
     return Room(**dict(row))
 
@@ -45,15 +46,15 @@ async def get_rooms_for_user(user_id: UUID) -> list[Room]:
     return [Room(**dict(r)) for r in rows]
 
 
-async def join_room(room_id: UUID, user_id: UUID) -> None:
+async def add_members(room_id: UUID, user_ids: list[UUID]) -> None:
     pool = await get_pool()
-    await pool.execute(
+    await pool.executemany(
         """
         INSERT INTO room_members (room_id, user_id)
         VALUES ($1, $2)
         ON CONFLICT DO NOTHING
         """,
-        room_id, user_id,
+        [(room_id, uid) for uid in user_ids],
     )
 
 

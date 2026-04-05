@@ -21,3 +21,20 @@ CREATE TABLE IF NOT EXISTS chat.messages (
     created_at TIMESTAMP,
     PRIMARY KEY ((room_id, bucket), created_at, message_id)
 ) WITH CLUSTERING ORDER BY (created_at DESC, message_id DESC);
+
+-- Test keyspace (same schema, isolated from real data)
+CREATE KEYSPACE IF NOT EXISTS chat_test
+WITH replication = {
+    'class': 'NetworkTopologyStrategy',
+    'dc1': 3
+};
+
+CREATE TABLE IF NOT EXISTS chat_test.messages (
+    room_id    UUID,
+    bucket     TEXT,
+    message_id BIGINT,
+    sender_id  UUID,
+    content    TEXT,
+    created_at TIMESTAMP,
+    PRIMARY KEY ((room_id, bucket), created_at, message_id)
+) WITH CLUSTERING ORDER BY (created_at DESC, message_id DESC);

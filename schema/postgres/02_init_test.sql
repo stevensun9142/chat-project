@@ -1,3 +1,8 @@
+-- Create test database and apply the same schema
+CREATE DATABASE chat_db_test;
+
+\connect chat_db_test
+
 -- Users
 CREATE TABLE users (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),

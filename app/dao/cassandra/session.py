@@ -1,6 +1,6 @@
 from cassandra.cluster import Cluster, Session
 
-from app.config import settings
+from app.config.settings import settings
 
 _session: Session | None = None
 

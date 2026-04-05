@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     cass_port: int = 9042
     cass_keyspace: str = "chat"
 
+    # Auth
+    jwt_secret: str = "change-me-in-prod"
+    jwt_expiry_minutes: int = 30
+    refresh_token_expiry_days: int = 7
+
     @property
     def pg_dsn(self) -> str:
         return f"postgresql://{self.pg_user}:{self.pg_password}@{self.pg_host}:{self.pg_port}/{self.pg_database}"

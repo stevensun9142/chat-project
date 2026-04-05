@@ -11,6 +11,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./schema/postgres/init.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ./schema/postgres/02_init_test.sql:/docker-entrypoint-initdb.d/02_init_test.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U chat -d chat_db"]
       interval: 5s
