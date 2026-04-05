@@ -12,6 +12,7 @@ from app.dao.postgres.rooms_dao import (
     get_rooms_for_user,
     leave_room,
 )
+from app.dao.postgres.users_dao import get_user_by_username
 from app.models import User
 from app.schemas import (
     MemberResponse,
@@ -61,7 +62,13 @@ async def list_members(room_id: UUID, user: User = Depends(get_current_user)):
 @router.post("/{room_id}/members", status_code=status.HTTP_204_NO_CONTENT)
 async def add_room_members(room_id: UUID, body: RoomAddMembersRequest, user: User = Depends(get_current_user)):
     await _verify_membership(room_id, user.id)
-    await add_members(room_id, body.user_ids)
+    user_ids = []
+    for username in body.usernames:
+        found = await get_user_by_username(username)
+        if found is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User '{username}' not found")
+        user_ids.append(found.id)
+    await add_members(room_id, user_ids)
 
 
 @router.delete("/{room_id}/members", status_code=status.HTTP_204_NO_CONTENT)

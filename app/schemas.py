@@ -42,7 +42,7 @@ class RoomCreateRequest(BaseModel):
 
 
 class RoomAddMembersRequest(BaseModel):
-    user_ids: list[UUID]
+    usernames: list[str]
 
 
 class RoomResponse(BaseModel):

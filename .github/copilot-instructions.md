@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-A Discord-style chat application built as a learning project for distributed systems. Currently on **Phase 2 of 10** (Phases 1–2 complete). Full architecture and build order are in `STEERING.md` (never push that file).
+A Discord-style chat application built as a learning project for distributed systems. Currently on **Phase 3 of 10** (Phases 1–3 complete). Full architecture and build order are in `STEERING.md` (never push that file).
 
 The user refers to me by **Mr. I**.
 
@@ -24,6 +24,8 @@ The user refers to me by **Mr. I**.
 - **bcrypt** — password hashing (slow-by-design, salted)
 - **python-jose** — JWT encoding/decoding (HS256 symmetric)
 - **Docker Compose** — Postgres 16 + Cassandra 4.1 (commands need `sudo`)
+- **React 19 + Vite** — frontend SPA in `frontend/`, uses react-router-dom
+- **Node.js 20** — for frontend tooling
 
 ## Project Structure
 
@@ -50,6 +52,16 @@ schema/
   postgres/init.sql         — users, rooms, room_members, refresh_tokens tables
   postgres/02_init_test.sql — test database (chat_db_test) with same schema
   cassandra/init.cql        — chat + chat_test keyspaces, messages table
+frontend/
+  src/
+    api.js                 — fetch wrapper + all API client functions
+    auth.jsx               — AuthContext provider (token storage, login/logout)
+    jwtDecode.js           — client-side JWT payload decode (no verification)
+    App.jsx                — react-router-dom routing with protected/guest routes
+    pages/
+      Login.jsx            — login form → POST /auth/login
+      Register.jsx         — register form → POST /auth/register, auto-login
+      Rooms.jsx            — room list sidebar, create/leave rooms, message history, add members
 tests/
   conftest.py              — overrides settings to use test databases
   test_api.py              — Phase 2: 5 integration tests via httpx → FastAPI
@@ -80,11 +92,23 @@ See `.github/instructions/database.instructions.md` for full schema details.
 | GET | `/rooms` | Yes | List rooms for current user |
 | GET | `/rooms/{id}` | Yes+member | Room detail (404 if not member) |
 | GET | `/rooms/{id}/members` | Yes+member | List room members |
-| POST | `/rooms/{id}/members` | Yes+member | Add members to room |
+| POST | `/rooms/{id}/members` | Yes+member | Add members by username (`{"usernames": [...]}`) |
 | DELETE | `/rooms/{id}/members` | Yes | Leave room |
 | GET | `/rooms/{id}/messages` | Yes+member | Message history from Cassandra |
 
 Non-members get 404 (not 403) to avoid leaking room existence.
+
+## Frontend (Phase 3)
+
+Minimal React SPA that wraps all API endpoints. No CSS framework — plain inline styles.
+
+- **Auth flow**: tokens stored in `localStorage`. `AuthContext` provides `accessToken`, `user` (decoded from JWT), `saveTokens()`, `logout()`. JWT is decoded client-side (payload only, no verification — server handles that).
+- **Routing**: `react-router-dom` with `ProtectedRoute` (redirects to `/login` if no token) and `GuestRoute` (redirects to `/` if already logged in).
+- **API client** (`src/api.js`): single `request()` helper that handles JSON serialization, Bearer token injection, and error normalization. All endpoint functions are thin wrappers.
+- **Add members**: uses usernames (not UUIDs). The route resolves usernames → UUIDs server-side via `get_user_by_username`.
+- **No message sending**: the chat input is disabled — requires WebSocket (Phase 4).
+- **CORS**: FastAPI allows `http://localhost:5173` and `:5174` origins with credentials.
+- **Dev server**: Vite on port 5173. Backend on port 8000.
 
 ## Testing
 
@@ -103,6 +127,8 @@ sudo docker compose up -d
 sudo docker exec -i chat-cassandra cqlsh < schema/cassandra/init.cql
 # Run API server
 source .venv/bin/activate && uvicorn app.main:app --port 8000
+# Run frontend dev server
+cd frontend && npm run dev
 # Run tests
 python -m pytest tests/ -v
 ```
