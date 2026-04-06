@@ -37,9 +37,12 @@ func HandleUpgrade(hub *Hub, validator *auth.JWTValidator) http.HandlerFunc {
 			return
 		}
 
+		client := NewClient(hub, conn, claims.UserID, claims.Username)
+		hub.Register(client)
+
 		log.Printf("user %s (%s) connected", claims.Username, claims.UserID)
-		_ = hub
-		_ = conn
-		// TODO: register connection in hub, start read/write pumps
+
+		go client.writePump()
+		client.readPump() // blocks until disconnect
 	}
 }

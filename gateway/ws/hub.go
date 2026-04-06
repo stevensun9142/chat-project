@@ -1,49 +1,44 @@
 package ws
 
 import (
+	"log"
 	"sync"
-
-	"github.com/gorilla/websocket"
 )
 
-// Hub maintains the set of active connections indexed by user ID.
+// Hub maintains the set of active clients indexed by user ID.
 type Hub struct {
-	mu    sync.RWMutex
-	conns map[string]*websocket.Conn // user_id -> conn
+	mu      sync.RWMutex
+	clients map[string]*Client // user_id -> client
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		conns: make(map[string]*websocket.Conn),
+		clients: make(map[string]*Client),
 	}
 }
 
-func (h *Hub) Register(userID string, conn *websocket.Conn) {
+func (h *Hub) Register(client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	// Close existing connection for the same user (single session)
-	if old, ok := h.conns[userID]; ok {
-		old.Close()
+	if old, ok := h.clients[client.UserID]; ok {
+		log.Printf("replacing connection for user=%s", client.UserID)
+		close(old.send)
 	}
-	h.conns[userID] = conn
+	h.clients[client.UserID] = client
 }
 
-// Unregister removes a connection from the hub only if it matches the given
-// pointer. Each read goroutine holds a reference to its own conn from spawn
-// time. On reconnect, Register replaces the old conn with a new one — but the
-// old goroutine still runs its cleanup defer with the old pointer. Without this
-// check, the old goroutine would delete the new connection from the map.
-func (h *Hub) Unregister(userID string, conn *websocket.Conn) {
+func (h *Hub) Unregister(userID string, client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if h.conns[userID] == conn {
-		delete(h.conns, userID)
+	if h.clients[userID] == client {
+		close(client.send)
+		delete(h.clients, userID)
 	}
 }
 
-func (h *Hub) Get(userID string) (*websocket.Conn, bool) {
+func (h *Hub) Get(userID string) (*Client, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	conn, ok := h.conns[userID]
-	return conn, ok
+	client, ok := h.clients[userID]
+	return client, ok
 }
