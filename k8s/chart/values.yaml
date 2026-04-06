@@ -13,6 +13,9 @@ cassandra:
   storage: 2Gi
   nodePort: 30042
 
+jwt:
+  secret: change-me-in-prod
+
 kafka:
   image: apache/kafka:3.7.1
   replicas: 3
