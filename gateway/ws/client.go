@@ -1,11 +1,13 @@
 package ws
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/stevensun/chat-project/gateway/kafka"
 )
 
 const (
@@ -21,15 +23,17 @@ type Client struct {
 	hub      *Hub
 	conn     *websocket.Conn
 	send     chan []byte
+	producer *kafka.Producer
 	UserID   string
 	Username string
 }
 
-func NewClient(hub *Hub, conn *websocket.Conn, userID, username string) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, producer *kafka.Producer, userID, username string) *Client {
 	return &Client{
 		hub:      hub,
 		conn:     conn,
 		send:     make(chan []byte, sendBufSize),
+		producer: producer,
 		UserID:   userID,
 		Username: username,
 	}
@@ -104,32 +108,23 @@ func (c *Client) writePump() {
 	}
 }
 
-// handleSendMessage processes an incoming send_message from the client.
-// TODO: publish to Kafka (Step 4). For now, log and echo back.
+// handleSendMessage publishes the message to Kafka for persistence and delivery.
 func (c *Client) handleSendMessage(msg *ClientMessage) {
 	if msg.RoomID == "" || msg.Content == "" {
 		c.sendError("room_id and content are required")
 		return
 	}
 
-	log.Printf("message from user=%s room=%s: %s", c.UserID, msg.RoomID, msg.Content)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	// Placeholder: echo back as a new_message so we can test the round-trip.
-	// This will be replaced by Kafka producer → Router → delivery in Step 4.
-	reply := ServerMessage{
-		Type:       "new_message",
-		RoomID:     msg.RoomID,
-		SenderID:   c.UserID,
-		SenderName: c.Username,
-		Content:    msg.Content,
-		CreatedAt:  time.Now().UTC().Format(time.RFC3339),
-	}
-	data, err := json.Marshal(reply)
-	if err != nil {
-		log.Printf("marshal error: %v", err)
+	if err := c.producer.Publish(ctx, msg.RoomID, c.UserID, c.Username, msg.Content); err != nil {
+		log.Printf("kafka publish error user=%s room=%s: %v", c.UserID, msg.RoomID, err)
+		c.sendError("failed to send message")
 		return
 	}
-	c.send <- data
+
+	log.Printf("published message user=%s room=%s", c.UserID, msg.RoomID)
 }
 
 // sendError sends a JSON error message to the client.

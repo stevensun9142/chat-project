@@ -4,8 +4,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/stevensun/chat-project/gateway/auth"
+	"github.com/stevensun/chat-project/gateway/kafka"
 	"github.com/stevensun/chat-project/gateway/ws"
 )
 
@@ -20,10 +22,18 @@ func main() {
 		log.Fatal("JWT_SECRET environment variable is required")
 	}
 
+	brokersEnv := os.Getenv("KAFKA_BROKERS")
+	if brokersEnv == "" {
+		log.Fatal("KAFKA_BROKERS environment variable is required")
+	}
+	brokers := strings.Split(brokersEnv, ",")
+
 	validator := auth.NewJWTValidator(jwtSecret)
 	hub := ws.NewHub()
+	producer := kafka.NewProducer(brokers)
+	defer producer.Close()
 
-	http.HandleFunc("/ws", ws.HandleUpgrade(hub, validator))
+	http.HandleFunc("/ws", ws.HandleUpgrade(hub, validator, producer))
 
 	log.Printf("Gateway listening on :%s", port)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
