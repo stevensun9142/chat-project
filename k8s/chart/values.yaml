@@ -1,0 +1,35 @@
+postgres:
+  image: postgres:16
+  password: chat_secret
+  user: chat
+  database: chat_db
+  storage: 1Gi
+  nodePort: 30432
+
+cassandra:
+  image: cassandra:4.1
+  clusterName: chat_cluster
+  dc: dc1
+  storage: 2Gi
+  nodePort: 30042
+
+kafka:
+  image: apache/kafka:3.7.1
+  replicas: 3
+  clusterId: MkU3OEVBNTcwNTJENDM2Qk
+  heapOpts: "-Xmx256m -Xms256m"
+  storage: 1Gi
+  nodePorts:
+    - 30092
+    - 30093
+    - 30094
+  topics:
+    - name: chat.messages
+      partitions: 6
+      replicationFactor: 3
+    - name: chat.delivery
+      partitions: 6
+      replicationFactor: 3
+    - name: presence.events
+      partitions: 3
+      replicationFactor: 3

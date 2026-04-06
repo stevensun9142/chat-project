@@ -1,0 +1,127 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+data:
+  01_init.sql: |
+    CREATE TABLE users (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        username    VARCHAR(32)  NOT NULL UNIQUE,
+        email       VARCHAR(255) NOT NULL UNIQUE,
+        password_hash TEXT       NOT NULL,
+        created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+    );
+    CREATE TABLE rooms (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name        VARCHAR(100) NOT NULL,
+        created_by  UUID         NOT NULL REFERENCES users(id),
+        created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+    );
+    CREATE TABLE room_members (
+        room_id     UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        joined_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (room_id, user_id)
+    );
+    CREATE INDEX idx_room_members_user ON room_members(user_id);
+    CREATE TABLE refresh_tokens (
+        token_hash  TEXT        PRIMARY KEY,
+        user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expires_at  TIMESTAMPTZ NOT NULL,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
+
+  02_init_test.sql: |
+    CREATE DATABASE chat_db_test;
+    \connect chat_db_test
+    CREATE TABLE users (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        username    VARCHAR(32)  NOT NULL UNIQUE,
+        email       VARCHAR(255) NOT NULL UNIQUE,
+        password_hash TEXT       NOT NULL,
+        created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+    );
+    CREATE TABLE rooms (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name        VARCHAR(100) NOT NULL,
+        created_by  UUID         NOT NULL REFERENCES users(id),
+        created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+    );
+    CREATE TABLE room_members (
+        room_id     UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        joined_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (room_id, user_id)
+    );
+    CREATE INDEX idx_room_members_user ON room_members(user_id);
+    CREATE TABLE refresh_tokens (
+        token_hash  TEXT        PRIMARY KEY,
+        user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expires_at  TIMESTAMPTZ NOT NULL,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  type: NodePort
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+      nodePort: {{ .Values.postgres.nodePort }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image }}
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.postgres.user | quote }}
+            - name: POSTGRES_PASSWORD
+              value: {{ .Values.postgres.password | quote }}
+            - name: POSTGRES_DB
+              value: {{ .Values.postgres.database | quote }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.postgres.user | quote }}]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: init
+          configMap:
+            name: postgres-init
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.postgres.storage }}

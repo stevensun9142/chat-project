@@ -1,0 +1,31 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      # Postgres
+      - containerPort: 30432
+        hostPort: 5432
+        protocol: TCP
+      # Cassandra
+      - containerPort: 30042
+        hostPort: 9042
+        protocol: TCP
+      # Kafka brokers
+      - containerPort: 30092
+        hostPort: 9092
+        protocol: TCP
+      - containerPort: 30093
+        hostPort: 9093
+        protocol: TCP
+      - containerPort: 30094
+        hostPort: 9094
+        protocol: TCP
+      # API Service
+      - containerPort: 30800
+        hostPort: 8000
+        protocol: TCP
+      # Gateway WebSocket
+      - containerPort: 30801
+        hostPort: 8001
+        protocol: TCP
