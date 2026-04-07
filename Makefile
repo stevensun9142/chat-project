@@ -29,7 +29,7 @@ api:
 
 # Run the Go gateway locally
 gateway:
-	cd gateway && JWT_SECRET=change-me-in-prod KAFKA_BROKERS=localhost:9092,localhost:9093,localhost:9094 go run main.go
+	cd gateway && JWT_SECRET=change-me-in-prod KAFKA_BROKERS=localhost:9092,localhost:9093,localhost:9094 GATEWAY_PORT=8001 GRPC_PORT=9001 go run main.go
 
 # Run the frontend dev server
 frontend:

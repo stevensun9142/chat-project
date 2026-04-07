@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package deliverypb;
+
+option go_package = "github.com/stevensun/chat-project/proto";
+
+service Delivery {
+  // Deliver sends a batch of messages to a specific gateway.
+  // The gateway pushes each message to the listed users via WebSocket.
+  rpc Deliver(DeliverRequest) returns (DeliverResponse);
+}
+
+message DeliverRequest {
+  repeated DeliverMessage messages = 1;
+}
+
+message DeliverMessage {
+  repeated string user_ids = 1;
+  int64 message_id = 2;
+  string room_id = 3;
+  string sender_id = 4;
+  string sender_name = 5;
+  string content = 6;
+  string created_at = 7;
+}
+
+message DeliverResponse {
+  int32 delivered = 1;
+}

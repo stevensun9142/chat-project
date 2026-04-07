@@ -32,9 +32,12 @@ spec:
           imagePullPolicy: Never
           ports:
             - containerPort: {{ .Values.gateway.port }}
+            - containerPort: {{ .Values.gateway.grpcPort }}
           env:
             - name: GATEWAY_PORT
               value: {{ .Values.gateway.port | quote }}
+            - name: GRPC_PORT
+              value: {{ .Values.gateway.grpcPort | quote }}
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:

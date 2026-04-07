@@ -30,6 +30,11 @@ type Client struct {
 	Username string
 }
 
+// Send returns the client's outbound message channel.
+func (c *Client) Send() chan []byte {
+	return c.send
+}
+
 func NewClient(hub *Hub, conn *websocket.Conn, producer *kafka.Producer, idgen *id.Generator, userID, username string) *Client {
 	return &Client{
 		hub:      hub,

@@ -17,11 +17,17 @@ gateway:
   image: chat-gateway:latest
   replicas: 1
   port: 8001
+  grpcPort: 9001
   nodePort: 30801
 
 messageWorker:
   image: chat-message-worker:latest
   replicas: 1
+
+redis:
+  image: redis:7.2
+  storage: 512Mi
+  nodePort: 30379
 
 jwt:
   secret: change-me-in-prod
