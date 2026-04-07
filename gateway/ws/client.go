@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/stevensun/chat-project/gateway/id"
 	"github.com/stevensun/chat-project/gateway/kafka"
 )
 
@@ -24,16 +25,18 @@ type Client struct {
 	conn     *websocket.Conn
 	send     chan []byte
 	producer *kafka.Producer
+	idgen    *id.Generator
 	UserID   string
 	Username string
 }
 
-func NewClient(hub *Hub, conn *websocket.Conn, producer *kafka.Producer, userID, username string) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, producer *kafka.Producer, idgen *id.Generator, userID, username string) *Client {
 	return &Client{
 		hub:      hub,
 		conn:     conn,
 		send:     make(chan []byte, sendBufSize),
 		producer: producer,
+		idgen:    idgen,
 		UserID:   userID,
 		Username: username,
 	}
@@ -127,7 +130,9 @@ func (c *Client) handleSendMessage(msg *ClientMessage) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := c.producer.Publish(ctx, msg.RoomID, c.UserID, c.Username, msg.Content); err != nil {
+	msgID := c.idgen.NextID()
+
+	if err := c.producer.Publish(ctx, msgID, msg.RoomID, c.UserID, c.Username, msg.Content); err != nil {
 		log.Printf("kafka publish error user=%s room=%s: %v", c.UserID, msg.RoomID, err)
 		c.sendError("failed to send message")
 		return

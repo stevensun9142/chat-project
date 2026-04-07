@@ -162,8 +162,8 @@ Go WebSocket service at `gateway/`. Steps 1-5 complete, step 6 next.
 | 3 | WebSocket read/write pumps, heartbeats, hub registration | done (client.go, hub.go, handler.go) |
 | 4 | Kafka producer — publish to chat.messages + chat.delivery | done (kafka/producer.go) |
 | 5 | Presence events — connect/disconnect to presence.events | done (kafka/producer.go, client.go, handler.go) |
-| 6 | Snowflake ID generator | **next** |
-| 7 | Frontend WebSocket client — enable chat input | not started |
+| 6 | Snowflake ID generator | done (id/snowflake.go) |
+| 7 | Frontend WebSocket client — enable chat input | **next** |
 | 8 | Integration tests — WS → Kafka | not started |
 
 ### WebSocket Message Schema

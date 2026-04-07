@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/stevensun/chat-project/gateway/auth"
+	"github.com/stevensun/chat-project/gateway/id"
 	"github.com/stevensun/chat-project/gateway/kafka"
 	"github.com/stevensun/chat-project/gateway/ws"
 )
@@ -41,10 +42,11 @@ func main() {
 	hub := ws.NewHub()
 	producer := kafka.NewProducer(brokers, gatewayID)
 	defer producer.Close()
+	idgen := id.NewGenerator(gatewayID)
 
-	http.HandleFunc("/ws", ws.HandleUpgrade(hub, validator, producer))
+	http.HandleFunc("/ws", ws.HandleUpgrade(hub, validator, producer, idgen))
 
-	log.Printf("Gateway listening on :%s (id=%s)", port, gatewayID)
+	log.Printf("Gateway listening on :%s (id=%s, machine=%d)", port, gatewayID, idgen.MachineID())
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}

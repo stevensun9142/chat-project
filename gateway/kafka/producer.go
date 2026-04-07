@@ -11,6 +11,7 @@ import (
 
 // MessageEvent is the payload published to chat.messages and chat.delivery.
 type MessageEvent struct {
+	MessageID  int64  `json:"message_id"`
 	RoomID     string `json:"room_id"`
 	SenderID   string `json:"sender_id"`
 	SenderName string `json:"sender_name"`
@@ -63,8 +64,9 @@ func NewProducer(brokers []string, gatewayID string) *Producer {
 }
 
 // Publish writes a message event to both chat.messages and chat.delivery topics.
-func (p *Producer) Publish(ctx context.Context, roomID, senderID, senderName, content string) error {
+func (p *Producer) Publish(ctx context.Context, messageID int64, roomID, senderID, senderName, content string) error {
 	event := MessageEvent{
+		MessageID:  messageID,
 		RoomID:     roomID,
 		SenderID:   senderID,
 		SenderName: senderName,
