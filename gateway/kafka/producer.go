@@ -29,13 +29,15 @@ type PresenceEvent struct {
 
 // Producer publishes message events to Kafka.
 type Producer struct {
-	messages *kafka.Writer
-	delivery *kafka.Writer
-	presence *kafka.Writer
+	messages  *kafka.Writer
+	delivery  *kafka.Writer
+	presence  *kafka.Writer
+	GatewayID string
 }
 
-func NewProducer(brokers []string) *Producer {
+func NewProducer(brokers []string, gatewayID string) *Producer {
 	return &Producer{
+		GatewayID: gatewayID,
 		messages: &kafka.Writer{
 			Addr:         kafka.TCP(brokers...),
 			Topic:        "chat.messages",
@@ -97,11 +99,11 @@ func (p *Producer) Publish(ctx context.Context, roomID, senderID, senderName, co
 }
 
 // PublishPresence writes a connect or disconnect event to presence.events.
-func (p *Producer) PublishPresence(ctx context.Context, userID, username, gatewayID, event string) error {
+func (p *Producer) PublishPresence(ctx context.Context, userID, username, event string) error {
 	evt := PresenceEvent{
 		UserID:    userID,
 		Username:  username,
-		GatewayID: gatewayID,
+		GatewayID: p.GatewayID,
 		Event:     event,
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}

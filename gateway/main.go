@@ -39,10 +39,10 @@ func main() {
 
 	validator := auth.NewJWTValidator(jwtSecret)
 	hub := ws.NewHub()
-	producer := kafka.NewProducer(brokers)
+	producer := kafka.NewProducer(brokers, gatewayID)
 	defer producer.Close()
 
-	http.HandleFunc("/ws", ws.HandleUpgrade(hub, validator, producer, gatewayID))
+	http.HandleFunc("/ws", ws.HandleUpgrade(hub, validator, producer))
 
 	log.Printf("Gateway listening on :%s (id=%s)", port, gatewayID)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {

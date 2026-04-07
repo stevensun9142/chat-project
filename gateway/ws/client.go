@@ -20,24 +20,22 @@ const (
 
 // Client represents a single WebSocket connection with its identity and send channel.
 type Client struct {
-	hub       *Hub
-	conn      *websocket.Conn
-	send      chan []byte
-	producer  *kafka.Producer
-	UserID    string
-	Username  string
-	GatewayID string
+	hub      *Hub
+	conn     *websocket.Conn
+	send     chan []byte
+	producer *kafka.Producer
+	UserID   string
+	Username string
 }
 
-func NewClient(hub *Hub, conn *websocket.Conn, producer *kafka.Producer, userID, username, gatewayID string) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, producer *kafka.Producer, userID, username string) *Client {
 	return &Client{
-		hub:       hub,
-		conn:      conn,
-		send:      make(chan []byte, sendBufSize),
-		producer:  producer,
-		UserID:    userID,
-		Username:  username,
-		GatewayID: gatewayID,
+		hub:      hub,
+		conn:     conn,
+		send:     make(chan []byte, sendBufSize),
+		producer: producer,
+		UserID:   userID,
+		Username: username,
 	}
 }
 
@@ -51,7 +49,7 @@ func (c *Client) readPump() {
 		if removed := c.hub.Unregister(c.UserID, c); removed {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			if err := c.producer.PublishPresence(ctx, c.UserID, c.Username, c.GatewayID, "disconnect"); err != nil {
+			if err := c.producer.PublishPresence(ctx, c.UserID, c.Username, "disconnect"); err != nil {
 				log.Printf("presence disconnect error user=%s: %v", c.UserID, err)
 			}
 		}
