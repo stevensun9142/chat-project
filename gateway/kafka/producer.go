@@ -18,10 +18,20 @@ type MessageEvent struct {
 	CreatedAt  string `json:"created_at"`
 }
 
+// PresenceEvent is the payload published to presence.events.
+type PresenceEvent struct {
+	UserID    string `json:"user_id"`
+	Username  string `json:"username"`
+	GatewayID string `json:"gateway_id"`
+	Event     string `json:"event"` // "connect" or "disconnect"
+	Timestamp string `json:"timestamp"`
+}
+
 // Producer publishes message events to Kafka.
 type Producer struct {
 	messages *kafka.Writer
 	delivery *kafka.Writer
+	presence *kafka.Writer
 }
 
 func NewProducer(brokers []string) *Producer {
@@ -36,6 +46,13 @@ func NewProducer(brokers []string) *Producer {
 		delivery: &kafka.Writer{
 			Addr:         kafka.TCP(brokers...),
 			Topic:        "chat.delivery",
+			Balancer:     &kafka.Hash{},
+			RequiredAcks: kafka.RequireOne,
+			BatchTimeout: 10 * time.Millisecond,
+		},
+		presence: &kafka.Writer{
+			Addr:         kafka.TCP(brokers...),
+			Topic:        "presence.events",
 			Balancer:     &kafka.Hash{},
 			RequiredAcks: kafka.RequireOne,
 			BatchTimeout: 10 * time.Millisecond,
@@ -79,6 +96,31 @@ func (p *Producer) Publish(ctx context.Context, roomID, senderID, senderName, co
 	return nil
 }
 
+// PublishPresence writes a connect or disconnect event to presence.events.
+func (p *Producer) PublishPresence(ctx context.Context, userID, username, gatewayID, event string) error {
+	evt := PresenceEvent{
+		UserID:    userID,
+		Username:  username,
+		GatewayID: gatewayID,
+		Event:     event,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	value, err := json.Marshal(evt)
+	if err != nil {
+		return fmt.Errorf("marshal presence event: %w", err)
+	}
+
+	if err := p.presence.WriteMessages(ctx, kafka.Message{
+		Key:   []byte(userID),
+		Value: value,
+	}); err != nil {
+		return fmt.Errorf("publish to presence.events: %w", err)
+	}
+
+	return nil
+}
+
 func (p *Producer) Close() error {
 	var errs []error
 	if err := p.messages.Close(); err != nil {
@@ -86,6 +128,9 @@ func (p *Producer) Close() error {
 	}
 	if err := p.delivery.Close(); err != nil {
 		errs = append(errs, fmt.Errorf("close delivery writer: %w", err))
+	}
+	if err := p.presence.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("close presence writer: %w", err))
 	}
 	if len(errs) > 0 {
 		return fmt.Errorf("%v", errs)

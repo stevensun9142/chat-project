@@ -20,22 +20,24 @@ const (
 
 // Client represents a single WebSocket connection with its identity and send channel.
 type Client struct {
-	hub      *Hub
-	conn     *websocket.Conn
-	send     chan []byte
-	producer *kafka.Producer
-	UserID   string
-	Username string
+	hub       *Hub
+	conn      *websocket.Conn
+	send      chan []byte
+	producer  *kafka.Producer
+	UserID    string
+	Username  string
+	GatewayID string
 }
 
-func NewClient(hub *Hub, conn *websocket.Conn, producer *kafka.Producer, userID, username string) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, producer *kafka.Producer, userID, username, gatewayID string) *Client {
 	return &Client{
-		hub:      hub,
-		conn:     conn,
-		send:     make(chan []byte, sendBufSize),
-		producer: producer,
-		UserID:   userID,
-		Username: username,
+		hub:       hub,
+		conn:      conn,
+		send:      make(chan []byte, sendBufSize),
+		producer:  producer,
+		UserID:    userID,
+		Username:  username,
+		GatewayID: gatewayID,
 	}
 }
 
@@ -43,7 +45,16 @@ func NewClient(hub *Hub, conn *websocket.Conn, producer *kafka.Producer, userID,
 // It runs in the handler goroutine (blocks until disconnect).
 func (c *Client) readPump() {
 	defer func() {
-		c.hub.Unregister(c.UserID, c)
+		// only publish disconnect event if this client has cleanly ended all connections
+		// removed is false if the client is connected on more than one instance, causing previous instances
+		// to disconnect
+		if removed := c.hub.Unregister(c.UserID, c); removed {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := c.producer.PublishPresence(ctx, c.UserID, c.Username, c.GatewayID, "disconnect"); err != nil {
+				log.Printf("presence disconnect error user=%s: %v", c.UserID, err)
+			}
+		}
 		c.conn.Close()
 	}()
 

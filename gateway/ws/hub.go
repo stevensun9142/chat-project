@@ -27,13 +27,15 @@ func (h *Hub) Register(client *Client) {
 	h.clients[client.UserID] = client
 }
 
-func (h *Hub) Unregister(userID string, client *Client) {
+func (h *Hub) Unregister(userID string, client *Client) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.clients[userID] == client {
 		close(client.send)
 		delete(h.clients, userID)
+		return true
 	}
+	return false
 }
 
 func (h *Hub) Get(userID string) (*Client, bool) {

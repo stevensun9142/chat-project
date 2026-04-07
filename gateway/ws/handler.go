@@ -1,8 +1,10 @@
 package ws
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/stevensun/chat-project/gateway/auth"
@@ -18,7 +20,7 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func HandleUpgrade(hub *Hub, validator *auth.JWTValidator, producer *kafka.Producer) http.HandlerFunc {
+func HandleUpgrade(hub *Hub, validator *auth.JWTValidator, producer *kafka.Producer, gatewayID string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := r.URL.Query().Get("token")
 		if token == "" {
@@ -38,8 +40,14 @@ func HandleUpgrade(hub *Hub, validator *auth.JWTValidator, producer *kafka.Produ
 			return
 		}
 
-		client := NewClient(hub, conn, producer, claims.UserID, claims.Username)
+		client := NewClient(hub, conn, producer, claims.UserID, claims.Username, gatewayID)
 		hub.Register(client)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := producer.PublishPresence(ctx, claims.UserID, claims.Username, gatewayID, "connect"); err != nil {
+			log.Printf("presence connect error user=%s: %v", claims.UserID, err)
+		}
 
 		log.Printf("user %s (%s) connected", claims.Username, claims.UserID)
 

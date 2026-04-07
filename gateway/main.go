@@ -28,14 +28,23 @@ func main() {
 	}
 	brokers := strings.Split(brokersEnv, ",")
 
+	gatewayID := os.Getenv("GATEWAY_ID")
+	if gatewayID == "" {
+		hostname, err := os.Hostname()
+		if err != nil {
+			log.Fatalf("failed to get hostname for GATEWAY_ID: %v", err)
+		}
+		gatewayID = hostname
+	}
+
 	validator := auth.NewJWTValidator(jwtSecret)
 	hub := ws.NewHub()
 	producer := kafka.NewProducer(brokers)
 	defer producer.Close()
 
-	http.HandleFunc("/ws", ws.HandleUpgrade(hub, validator, producer))
+	http.HandleFunc("/ws", ws.HandleUpgrade(hub, validator, producer, gatewayID))
 
-	log.Printf("Gateway listening on :%s", port)
+	log.Printf("Gateway listening on :%s (id=%s)", port, gatewayID)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
