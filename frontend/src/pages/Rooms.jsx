@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "../auth";
+import { useWebSocket } from "../useWebSocket";
 import { listRooms, createRoom, getMessages, getMembers, leaveRoom, addMembers } from "../api";
 
 export default function Rooms() {
@@ -12,22 +13,19 @@ export default function Rooms() {
   const [newMemberIds, setNewMemberIds] = useState("");
   const [addMemberId, setAddMemberId] = useState("");
   const [error, setError] = useState("");
+  const [msgInput, setMsgInput] = useState("");
   const messagesEndRef = useRef(null);
+  const selectedRoomRef = useRef(selectedRoom);
 
-  useEffect(() => {
-    loadRooms();
+  useEffect(() => { selectedRoomRef.current = selectedRoom; }, [selectedRoom]);
+
+  const handleWsMessage = useCallback((msg) => {
+    if (msg.type === "new_message" && msg.room_id === selectedRoomRef.current) {
+      setMessages(prev => [...prev, msg]);
+    }
   }, []);
 
-  useEffect(() => {
-    if (selectedRoom) {
-      loadMessages(selectedRoom);
-      loadMembers(selectedRoom);
-    }
-  }, [selectedRoom]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  const { status: wsStatus, sendMessage } = useWebSocket(accessToken, handleWsMessage);
 
   async function loadRooms() {
     try {
@@ -55,6 +53,21 @@ export default function Rooms() {
       setMembers([]);
     }
   }
+
+  useEffect(() => {
+    loadRooms();
+  }, []);
+
+  useEffect(() => {
+    if (selectedRoom) {
+      loadMessages(selectedRoom);
+      loadMembers(selectedRoom);
+    }
+  }, [selectedRoom]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   async function handleCreateRoom(e) {
     e.preventDefault();
@@ -107,6 +120,14 @@ export default function Rooms() {
       <div style={{ width: 260, borderRight: "1px solid #ccc", padding: 12, overflowY: "auto" }}>
         <div style={{ marginBottom: 12 }}>
           <strong>{user?.username}</strong>
+          <span style={{
+            display: "inline-block",
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            marginLeft: 8,
+            background: wsStatus === "connected" ? "#4caf50" : wsStatus === "connecting" ? "#ff9800" : "#f44336",
+          }} title={wsStatus} />
           <button onClick={logout} style={{ marginLeft: 8, fontSize: 12 }}>Logout</button>
         </div>
 
@@ -186,7 +207,7 @@ export default function Rooms() {
                   const sender = members.find(mem => mem.id === m.sender_id);
                   return (
                     <div key={m.message_id} style={{ marginBottom: 8 }}>
-                      <strong>{sender?.username || m.sender_id.slice(0, 8)}</strong>
+                      <strong>{sender?.username || m.sender_name || m.sender_id?.slice(0, 8)}</strong>
                       <span style={{ fontSize: 11, color: "#999", marginLeft: 8 }}>
                         {new Date(m.created_at).toLocaleString()}
                       </span>
@@ -198,10 +219,25 @@ export default function Rooms() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Note: no send message yet — that comes with WebSocket in Phase 4 */}
-            <p style={{ fontSize: 11, color: "#999", margin: "4px 0 0" }}>
-              Sending messages requires WebSocket (Phase 4).
-            </p>
+            {/* Message input */}
+            <form
+              onSubmit={e => {
+                e.preventDefault();
+                if (!msgInput.trim()) return;
+                sendMessage(selectedRoom, msgInput.trim());
+                setMsgInput("");
+              }}
+              style={{ display: "flex", gap: 8, marginTop: 8 }}
+            >
+              <input
+                value={msgInput}
+                onChange={e => setMsgInput(e.target.value)}
+                placeholder={wsStatus === "connected" ? "Type a message..." : "Connecting..."}
+                disabled={wsStatus !== "connected"}
+                style={{ flex: 1, padding: "6px 8px" }}
+              />
+              <button type="submit" disabled={wsStatus !== "connected"}>Send</button>
+            </form>
           </>
         ) : (
           <p style={{ color: "#999", marginTop: 40 }}>Select a room from the sidebar.</p>
