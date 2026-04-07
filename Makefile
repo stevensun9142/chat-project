@@ -46,3 +46,7 @@ message-worker:
 # Run Go gateway integration tests (requires K8s cluster with Kafka)
 test-gateway:
 	cd gateway && go test -v -count=1 -timeout 120s .
+
+# Run Go message-worker integration tests (requires K8s cluster)
+test-message-worker:
+	cd message-worker && go test -v -count=1 -timeout 120s .

@@ -22,7 +22,7 @@ func NewCassandra(hosts []string, port, keyspace string) (*Cassandra, error) {
 	cluster := gocql.NewCluster(hosts...)
 	cluster.Port = p
 	cluster.Keyspace = keyspace
-	cluster.Consistency = gocql.LocalQuorum
+	cluster.Consistency = gocql.One
 	cluster.ConnectTimeout = 10 * time.Second
 	cluster.Timeout = 5 * time.Second
 
