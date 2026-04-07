@@ -35,6 +35,10 @@ gateway:
 frontend:
 	cd frontend && npm run dev
 
-# Run tests
+# Run Python integration tests
 test:
 	source .venv/bin/activate && python -m pytest tests/ -v
+
+# Run Go gateway integration tests (requires K8s cluster with Kafka)
+test-gateway:
+	cd gateway && go test -v -count=1 -timeout 120s .

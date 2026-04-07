@@ -61,11 +61,12 @@ frontend/
     api.js                 — fetch wrapper + all API client functions
     auth.jsx               — AuthContext provider (token storage, login/logout)
     jwtDecode.js           — client-side JWT payload decode (no verification)
+    useWebSocket.js        — WebSocket hook: connect, reconnect with backoff, send/receive
     App.jsx                — react-router-dom routing with protected/guest routes
     pages/
       Login.jsx            — login form → POST /auth/login
       Register.jsx         — register form → POST /auth/register, auto-login
-      Rooms.jsx            — room list sidebar, create/leave rooms, message history, add members
+      Rooms.jsx            — room list sidebar, create/leave rooms, message history, add members, chat input
 tests/
   conftest.py              — overrides settings to use test databases
   test_api.py              — Phase 2: 5 integration tests via httpx → FastAPI
@@ -76,11 +77,13 @@ gateway/                     — (Phase 4, in progress) Go WebSocket service
   auth/
     jwt.go                   — JWTValidator: HS256 validation, keyFunc, extracts sub+username
   kafka/
-    producer.go              — Kafka producer: publishes MessageEvent to chat.messages + chat.delivery
+    producer.go              — Kafka producer: publishes MessageEvent to chat.messages + chat.delivery, PresenceEvent to presence.events
+  id/
+    snowflake.go             — Snowflake ID generator: 41-bit timestamp + 10-bit machine_id + 12-bit sequence
   ws/
-    client.go                — Client struct (conn + send channel + producer + identity), readPump, writePump, heartbeats
-    handler.go               — HandleUpgrade: validates ?token=, upgrades to WS, creates Client, starts pumps
-    hub.go                   — Hub: thread-safe user_id → *Client registry, identity-aware Unregister
+    client.go                — Client struct (conn + send channel + producer + idgen + identity), readPump, writePump, heartbeats
+    handler.go               — HandleUpgrade: validates ?token=, pre-flight presence publish with retry, upgrades to WS, creates Client, starts pumps
+    hub.go                   — Hub: thread-safe user_id → *Client registry, identity-aware Unregister (returns bool)
     messages.go              — ClientMessage (send_message) and ServerMessage (new_message, error) JSON types
 k8s/
   kind-config.yaml           — Kind cluster config with host port mappings
@@ -137,18 +140,19 @@ Minimal React SPA that wraps all API endpoints. No CSS framework — plain inlin
 
 ## Gateway Service (Phase 4 — In Progress)
 
-Go WebSocket service at `gateway/`. Steps 1-5 complete, step 6 next.
+Go WebSocket service at `gateway/`. Steps 1-7 complete, step 8 next.
 
 - **Go module**: `github.com/stevensun/chat-project/gateway`
 - **Dependencies**: gorilla/websocket v1.5.3, segmentio/kafka-go v0.4.47, golang-jwt/jwt/v5 v5.2.1
 - **JWT auth**: validates `?token=` query param before HTTP→WS upgrade. Same HS256 shared secret as Python API.
-- **Client struct**: wraps `*websocket.Conn` + `send chan []byte` (buffered 256) + `*kafka.Producer` + identity (UserID, Username, GatewayID). One Client per WebSocket connection.
+- **Client struct**: wraps `*websocket.Conn` + `send chan []byte` (buffered 256) + `*kafka.Producer` + `*id.Generator` + identity (UserID, Username). One Client per WebSocket connection.
 - **readPump**: runs on handler goroutine (blocks until disconnect). Infinite loop reading JSON from WebSocket, dispatches by message type. Pong handler resets 60s read deadline. Defer: publish disconnect presence event (only if `Unregister` returns true) + `conn.Close()`.
 - **writePump**: spawned as background goroutine. `select` on send channel and 30s ping ticker. Sends close frame when channel is closed. 10s write deadline per write.
 - **Hub**: `map[string]*Client` with `sync.RWMutex`. `Register(*Client)` closes old client's send channel on reconnect. `Unregister(userID, *Client)` checks pointer match before closing channel + deleting, returns `bool` (true if removed — prevents stale replaced clients from emitting false disconnects).
-- **Kafka Producer**: one per Gateway pod, shared across all clients. Three `kafka.Writer` instances — `chat.messages` (RequireAll acks), `chat.delivery` (RequireOne ack), `presence.events` (RequireOne ack). Messages/delivery keyed by room_id, presence keyed by user_id (hash partitioner). BatchTimeout 10ms.
-- **Presence events**: connect event published in `HandleUpgrade` after `hub.Register()`. Disconnect event published in `readPump` defer only when `hub.Unregister()` returns true. Payload: `{user_id, username, gateway_id, event, timestamp}`.
-- **handleSendMessage**: validates room_id/content, publishes to Kafka with 5s context timeout. No echo — messages will come back via Router (Phase 6).
+- **Kafka Producer**: one per Gateway pod, shared across all clients. Holds `GatewayID`. Three `kafka.Writer` instances — `chat.messages` (RequireAll acks), `chat.delivery` (RequireOne ack), `presence.events` (RequireOne ack). Messages/delivery keyed by room_id, presence keyed by user_id (hash partitioner). BatchTimeout 10ms.
+- **Presence events**: connect event published in `HandleUpgrade` before WS upgrade (pre-flight, with exponential backoff retry up to 60s — returns HTTP 503 on failure). Disconnect event published in `readPump` defer only when `hub.Unregister()` returns true (best-effort, no retry — Phase 7 Redis TTL heartbeats are the safety net). Payload: `{user_id, username, gateway_id, event, timestamp}`.
+- **Snowflake ID generator** (`id/snowflake.go`): 64-bit IDs — 41-bit timestamp (ms since 2026-01-01) + 10-bit machine_id (parsed from hostname trailing number, e.g. `gateway-2` → 2) + 12-bit sequence (4096/ms/machine). Mutex-protected. One instance per pod, shared by all clients. `handleSendMessage` calls `idgen.NextID()` before publishing.
+- **handleSendMessage**: generates snowflake ID, validates room_id/content, publishes to Kafka with 5s context timeout. No echo — messages will come back via Router (Phase 6).
 - **Env vars**: `JWT_SECRET` (required), `KAFKA_BROKERS` (required, comma-separated), `GATEWAY_PORT` (default 8001), `GATEWAY_ID` (optional, defaults to `os.Hostname()` — pod name in K8s). No defaults for secrets/infra — fails to start if missing.
 - **Run locally**: `make gateway` (sets env vars) or `JWT_SECRET=change-me-in-prod KAFKA_BROKERS=localhost:9092,localhost:9093,localhost:9094 go run gateway/main.go`
 - **No room membership check**: Gateway is a thin relay. Membership validated downstream in Message Worker (Phase 5) and Router (Phase 6).

@@ -13,6 +13,12 @@ cassandra:
   storage: 2Gi
   nodePort: 30042
 
+gateway:
+  image: chat-gateway:latest
+  replicas: 1
+  port: 8001
+  nodePort: 30801
+
 jwt:
   secret: change-me-in-prod
 
