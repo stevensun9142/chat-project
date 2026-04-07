@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: message-worker
+spec:
+  replicas: {{ .Values.messageWorker.replicas }}
+  selector:
+    matchLabels:
+      app: message-worker
+  template:
+    metadata:
+      labels:
+        app: message-worker
+    spec:
+      containers:
+        - name: message-worker
+          image: {{ .Values.messageWorker.image }}
+          imagePullPolicy: Never
+          env:
+            - name: KAFKA_BROKERS
+              value: "kafka-1-0.kafka-headless:9092,kafka-2-0.kafka-headless:9092,kafka-3-0.kafka-headless:9092"
+            - name: PG_DSN
+              value: "postgres://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@postgres:5432/{{ .Values.postgres.database }}?sslmode=disable"
+            - name: CASS_HOSTS
+              value: "cassandra"
+            - name: CASS_PORT
+              value: "9042"
+            - name: CASS_KEYSPACE
+              value: "chat"

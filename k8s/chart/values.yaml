@@ -19,6 +19,10 @@ gateway:
   port: 8001
   nodePort: 30801
 
+messageWorker:
+  image: chat-message-worker:latest
+  replicas: 1
+
 jwt:
   secret: change-me-in-prod
 

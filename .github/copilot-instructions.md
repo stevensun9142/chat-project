@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-A Discord-style chat application built as a learning project for distributed systems. Currently on **Phase 4 of 10** (Phases 1–3 complete, K8s infrastructure set up early). Full architecture and build order are in `STEERING.md` (never push that file).
+A Discord-style chat application built as a learning project for distributed systems. Currently on **Phase 6 of 10** (Phases 1–5 complete, Phase 6 next). Full architecture and build order are in `STEERING.md` (never push that file).
 
 The user refers to me by **Mr. I**.
 
@@ -23,8 +23,8 @@ The user refers to me by **Mr. I**.
 - **cassandra-driver** — sync Cassandra driver, session in `app/dao/cassandra/session.py`
 - **bcrypt** — password hashing (slow-by-design, salted)
 - **python-jose** — JWT encoding/decoding (HS256 symmetric)
-- **Go** — Gateway Service (WebSocket + Kafka producer), Presence & Router (Phase 6)
-- **Go 1.22** — Gateway Service, installed at `/usr/local/go`
+- **Go** — Gateway Service (WebSocket + Kafka producer), Message Worker (Kafka consumer + Cassandra persistence), Presence & Router (Phase 6)
+- **Go 1.22** — Gateway + Message Worker, installed at `/usr/local/go`
 - **Kafka** — 3 brokers (KRaft mode, apache/kafka:3.7.1), topics: chat.messages, chat.delivery, presence.events
 - **Kubernetes (Kind)** — all infrastructure runs in a Kind cluster, Helm chart at `k8s/chart/`
 - **Docker Compose** — still in repo but NOT used; all infra on K8s
@@ -72,8 +72,10 @@ tests/
   test_api.py              — Phase 2: 5 integration tests via httpx → FastAPI
   test_postgres.py         — Phase 1: 4 Postgres DAO tests
   test_cassandra.py        — Phase 1: 4 Cassandra DAO tests (note: sync, not async)
-gateway/                     — (Phase 4, in progress) Go WebSocket service
+gateway/                     — (Phase 4, COMPLETE) Go WebSocket service
+  Dockerfile                 — multi-stage: golang:1.22 → distroless
   main.go                    — entry point, reads GATEWAY_PORT, JWT_SECRET, KAFKA_BROKERS env vars
+  gateway_test.go            — 5 Go integration tests (WS auth, presence, messages → Kafka)
   auth/
     jwt.go                   — JWTValidator: HS256 validation, keyFunc, extracts sub+username
   kafka/
@@ -85,6 +87,14 @@ gateway/                     — (Phase 4, in progress) Go WebSocket service
     handler.go               — HandleUpgrade: validates ?token=, pre-flight presence publish with retry, upgrades to WS, creates Client, starts pumps
     hub.go                   — Hub: thread-safe user_id → *Client registry, identity-aware Unregister (returns bool)
     messages.go              — ClientMessage (send_message) and ServerMessage (new_message, error) JSON types
+message-worker/              — (Phase 5, in progress) Go Kafka consumer → Cassandra
+  main.go                    — entry point, wires config + signal context
+  message_worker_test.go     — 3 Go integration tests (persist, reject non-member, skip malformed)
+  consumer/
+    consumer.go              — Kafka consumer loop: fetch → membership check → persist → commit
+  store/
+    cassandra.go             — gocql session + PersistMessage() with weekly bucketing
+    postgres.go              — lib/pq connection pool + IsRoomMember() check
 k8s/
   kind-config.yaml           — Kind cluster config with host port mappings
   chart/
@@ -94,6 +104,7 @@ k8s/
       postgres.yaml          — ConfigMap (init SQL) + StatefulSet + NodePort Service
       cassandra.yaml         — StatefulSet + NodePort Service
       kafka.yaml             — 3 StatefulSets + headless Service + 3 NodePort Services + init Job
+      gateway.yaml           — Gateway StatefulSet + NodePort 30801 Service
       secrets.yaml           — JWT Secret (shared by API + Gateway)
 ```
 
@@ -138,9 +149,9 @@ Minimal React SPA that wraps all API endpoints. No CSS framework — plain inlin
 - **CORS**: FastAPI allows `http://localhost:5173` and `:5174` origins with credentials.
 - **Dev server**: Vite on port 5173. Backend on port 8000.
 
-## Gateway Service (Phase 4 — In Progress)
+## Gateway Service (Phase 4 — COMPLETE)
 
-Go WebSocket service at `gateway/`. Steps 1-7 complete, step 8 next.
+Go WebSocket service at `gateway/`. All 8 steps done, 5 Go integration tests passing. Dockerized and deployed to K8s (`gateway-0` pod running).
 
 - **Go module**: `github.com/stevensun/chat-project/gateway`
 - **Dependencies**: gorilla/websocket v1.5.3, segmentio/kafka-go v0.4.47, golang-jwt/jwt/v5 v5.2.1
@@ -155,20 +166,27 @@ Go WebSocket service at `gateway/`. Steps 1-7 complete, step 8 next.
 - **handleSendMessage**: generates snowflake ID, validates room_id/content, publishes to Kafka with 5s context timeout. No echo — messages will come back via Router (Phase 6).
 - **Env vars**: `JWT_SECRET` (required), `KAFKA_BROKERS` (required, comma-separated), `GATEWAY_PORT` (default 8001), `GATEWAY_ID` (optional, defaults to `os.Hostname()` — pod name in K8s). No defaults for secrets/infra — fails to start if missing.
 - **Run locally**: `make gateway` (sets env vars) or `JWT_SECRET=change-me-in-prod KAFKA_BROKERS=localhost:9092,localhost:9093,localhost:9094 go run gateway/main.go`
+- **Dockerfile**: multi-stage `golang:1.22` → `gcr.io/distroless/static-debian12`
+- **K8s**: StatefulSet + NodePort 30801, JWT_SECRET from `jwt-secret` Secret, KAFKA_BROKERS pointing at in-cluster Kafka headless service
 - **No room membership check**: Gateway is a thin relay. Membership validated downstream in Message Worker (Phase 5) and Router (Phase 6).
 
-### Phase 4 Implementation Plan (remaining steps)
+## Message Worker (Phase 5 — COMPLETE)
 
-| Step | Task | Status |
-|------|------|--------|
-| 1 | Init Go module + deps | done |
-| 2 | JWT validation | done (jwt.go) |
-| 3 | WebSocket read/write pumps, heartbeats, hub registration | done (client.go, hub.go, handler.go) |
-| 4 | Kafka producer — publish to chat.messages + chat.delivery | done (kafka/producer.go) |
-| 5 | Presence events — connect/disconnect to presence.events | done (kafka/producer.go, client.go, handler.go) |
-| 6 | Snowflake ID generator | done (id/snowflake.go) |
-| 7 | Frontend WebSocket client — enable chat input | done (useWebSocket.js, Rooms.jsx) |
-| 8 | Integration tests — WS → Kafka | **next** |
+Go Kafka consumer at `message-worker/`. Consumes `chat.messages`, validates room membership, persists to Cassandra. All 4 steps done, 3 Go integration tests passing. Dockerized and deployed to K8s.
+
+- **Go module**: `github.com/stevensun/chat-project/message-worker`
+- **Dependencies**: gocql v1.7.0, lib/pq v1.12.3, segmentio/kafka-go v0.4.47
+- **Consumer design**: `segmentio/kafka-go` Reader with consumer group `message-worker`, manual offset commit. At-least-once delivery.
+- **Per-message flow**: deserialize `MessageEvent` → `IsRoomMember()` check in Postgres → `PersistMessage()` to Cassandra (weekly bucket) → commit offset
+- **Retry**: transient errors (Postgres/Cassandra down) retry up to 3 times with 250ms backoff, then drop and commit
+- **Skip permanently bad messages**: malformed JSON, missing fields, non-member → commit and move on
+- **Cassandra consistency**: `ONE` (single-node dev). TODO: make configurable, switch to `LocalQuorum` for production.
+- **Naming convention**: consumer dirs prefixed with topic name (`message-worker/`, future `delivery-worker/`)
+- **Env vars**: `KAFKA_BROKERS` (required), `KAFKA_GROUP_ID` (default `message-worker`), `CASS_HOSTS`, `CASS_PORT`, `CASS_KEYSPACE`, `PG_DSN`
+- **Run locally**: `make message-worker`
+- **Dockerfile**: multi-stage `golang:1.22` → `gcr.io/distroless/static-debian12`
+- **K8s**: Deployment (not StatefulSet — plain consumer, no stable identity needed), env vars point to in-cluster Postgres/Cassandra/Kafka
+- **3 integration tests** in `message_worker_test.go`: persist valid message, reject non-member, skip malformed + persist next valid
 
 ### WebSocket Message Schema
 
@@ -199,8 +217,8 @@ Error: `{"type": "error", "message": "<description>"}`
 
 - **No unit tests** — integration tests only, hitting real Docker databases.
 - **Isolated test databases**: `chat_db_test` (Postgres), `chat_test` (Cassandra). Configured in `tests/conftest.py`.
-- **13 total tests** across 3 files. Cleanup deletes all rows after each test (dependency order).
-- Run: `python -m pytest tests/ -v`
+- **21 total tests**: 13 Python (3 files) + 5 Go Gateway + 3 Go Message Worker. Cleanup deletes all rows after each test (dependency order).
+- Run: `python -m pytest tests/ -v` (Python), `make test-gateway` (Gateway), `make test-message-worker` (Worker)
 - Requires: Kind cluster running + Cassandra schema loaded
 
 ## Build & Run
@@ -221,6 +239,8 @@ sudo kubectl --context kind-chat get pods -n chat
 source .venv/bin/activate && uvicorn app.main:app --port 8000
 # Run Go gateway
 cd gateway && JWT_SECRET=change-me-in-prod go run main.go
+# Run Go message worker
+cd message-worker && KAFKA_BROKERS=localhost:9092,localhost:9093,localhost:9094 go run main.go
 # Run frontend dev server
 cd frontend && npm run dev
 # Run tests
@@ -232,8 +252,11 @@ make upgrade           # Helm upgrade after chart changes
 make pods              # List pods
 make api               # Run Python API on :8000
 make gateway           # Run Go gateway on :8001
+make message-worker    # Run Go message worker
 make frontend          # Run Vite on :5173
 make test              # Run pytest
+make test-gateway      # Run Go gateway tests
+make test-message-worker # Run Go message worker tests
 
 # --- Helm upgrade after chart changes ---
 sudo helm --kube-context kind-chat upgrade chat k8s/chart/ -n chat
