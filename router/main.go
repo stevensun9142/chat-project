@@ -44,6 +44,10 @@ func main() {
 	defer pool.Close()
 	log.Printf("gateway pool configured: %v", gatewayAddrs)
 
+	// Per-gateway batching for delivery RPCs.
+	batcher := delivery.NewBatcher(pool)
+	defer batcher.Close()
+
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
@@ -65,7 +69,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		deliveryConsumer := delivery.NewConsumer(brokers, "router-delivery", pg, registry, pool)
+		deliveryConsumer := delivery.NewConsumer(brokers, "router-delivery", pg, registry, batcher)
 		log.Println("starting delivery consumer group=router-delivery topic=chat.delivery")
 		if err := deliveryConsumer.Run(ctx); err != nil {
 			log.Printf("delivery consumer error: %v", err)

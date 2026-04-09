@@ -29,16 +29,14 @@ type Consumer struct {
 	reader   *kafka.Reader
 	pg       *store.Postgres
 	registry *presence.Registry
-	pool     *GatewayPool
+	batcher  *Batcher
 }
 
-const maxRetries = 3
-
-func NewConsumer(brokers []string, groupID string, pg *store.Postgres, registry *presence.Registry, pool *GatewayPool) *Consumer {
+func NewConsumer(brokers []string, groupID string, pg *store.Postgres, registry *presence.Registry, batcher *Batcher) *Consumer {
 	return &Consumer{
 		pg:       pg,
 		registry: registry,
-		pool:     pool,
+		batcher:  batcher,
 		reader: kafka.NewReader(kafka.ReaderConfig{
 			Brokers:        brokers,
 			Topic:          "chat.delivery",
@@ -51,11 +49,11 @@ func NewConsumer(brokers []string, groupID string, pg *store.Postgres, registry 
 }
 
 // Run consumes delivery events until the context is cancelled.
+// Delivery is best-effort: transient errors are logged and the message is
+// committed to avoid head-of-line blocking. Users fall back to message
+// history from the REST API for anything missed.
 func (c *Consumer) Run(ctx context.Context) error {
 	defer c.reader.Close()
-
-	var retries int
-	var lastOffset int64 = -1
 
 	for {
 		msg, err := c.reader.FetchMessage(ctx)
@@ -66,23 +64,13 @@ func (c *Consumer) Run(ctx context.Context) error {
 			return err
 		}
 
-		// Reset retry counter when we get a new message.
-		if msg.Offset != lastOffset {
-			retries = 0
-			lastOffset = msg.Offset
-		}
-
 		if err := c.handle(ctx, msg); err != nil {
-			retries++
-			if retries >= maxRetries {
-				log.Printf("delivery: dropping offset=%d after %d retries: %v", msg.Offset, retries, err)
-			} else {
-				log.Printf("delivery: handle error offset=%d attempt=%d: %v", msg.Offset, retries, err)
-				time.Sleep(250 * time.Millisecond)
-				continue
-			}
+			log.Printf("delivery: skipping offset=%d: %v", msg.Offset, err)
 		}
 
+		// Always commit — failed deliveries are dropped to avoid head-of-line
+		// blocking. The message is not lost: the message-worker persists it to
+		// Cassandra independently, so users will see it via REST history.
 		if err := c.reader.CommitMessages(ctx, msg); err != nil {
 			if ctx.Err() != nil {
 				return nil
@@ -128,38 +116,17 @@ func (c *Consumer) handle(ctx context.Context, msg kafka.Message) error {
 		return nil // no online recipients
 	}
 
-	// Send one gRPC Deliver call per gateway. Best-effort — don't retry gRPC failures.
+	// Enqueue one DeliverMessage per gateway into the batcher.
 	for gwID, userIDs := range usersByGateway {
-		client, err := c.pool.Client(gwID)
-		if err != nil {
-			log.Printf("delivery: grpc client gateway=%s: %v", gwID, err)
-			continue
-		}
-
-		req := &pb.DeliverRequest{
-			Messages: []*pb.DeliverMessage{
-				{
-					UserIds:    userIDs,
-					MessageId:  evt.MessageID,
-					RoomId:     evt.RoomID,
-					SenderId:   evt.SenderID,
-					SenderName: evt.SenderName,
-					Content:    evt.Content,
-					CreatedAt:  evt.CreatedAt,
-				},
-			},
-		}
-
-		callCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-		resp, err := client.Deliver(callCtx, req)
-		cancel()
-		if err != nil {
-			log.Printf("delivery: grpc deliver gateway=%s: %v", gwID, err)
-			continue
-		}
-
-		log.Printf("delivery: room=%s gateway=%s delivered=%d users=%d",
-			evt.RoomID, gwID, resp.Delivered, len(userIDs))
+		c.batcher.Add(gwID, &pb.DeliverMessage{
+			UserIds:    userIDs,
+			MessageId:  evt.MessageID,
+			RoomId:     evt.RoomID,
+			SenderId:   evt.SenderID,
+			SenderName: evt.SenderName,
+			Content:    evt.Content,
+			CreatedAt:  evt.CreatedAt,
+		})
 	}
 
 	return nil
