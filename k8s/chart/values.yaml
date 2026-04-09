@@ -24,6 +24,10 @@ messageWorker:
   image: chat-message-worker:latest
   replicas: 1
 
+router:
+  image: chat-router:latest
+  replicas: 1
+
 redis:
   image: redis:7.2
   storage: 512Mi

@@ -1,14 +1,14 @@
 HELM_CMD = sudo helm --kube-context kind-chat
 KUBECTL_CMD = sudo kubectl --context kind-chat -n chat
 
-.PHONY: deploy upgrade status pods logs-gateway cassandra-schema api gateway frontend test message-worker test-gateway test-message-worker router
+.PHONY: deploy upgrade status pods logs-gateway cassandra-schema api gateway frontend test message-worker test-gateway test-message-worker router test-router test-e2e build-gateway build-message-worker build-router build-all
 
-# First-time install
-deploy:
+# First-time install (build images, load into Kind, deploy via Helm)
+deploy: build-all
 	$(HELM_CMD) install chat k8s/chart/ --namespace chat --create-namespace
 
-# Upgrade after chart changes
-upgrade:
+# Upgrade after chart changes (rebuild images, load into Kind, upgrade Helm)
+upgrade: build-all
 	$(HELM_CMD) upgrade chat k8s/chart/ -n chat
 
 # Show all pods
@@ -54,3 +54,26 @@ test-gateway:
 # Run Go message-worker integration tests (requires K8s cluster)
 test-message-worker:
 	cd message-worker && go test -v -count=1 -timeout 120s .
+
+# Run Go router integration tests (requires K8s cluster + Redis)
+test-router:
+	cd router && go test -v -count=1 -timeout 120s .
+
+# Run E2E cross-gateway delivery test (requires K8s cluster + Redis)
+test-e2e:
+	cd e2e && go test -v -count=1 -timeout 120s .
+
+# Docker build + load into Kind
+build-gateway:
+	sudo docker build -f gateway/Dockerfile . -t chat-gateway:latest
+	sudo kind load docker-image chat-gateway:latest --name chat
+
+build-message-worker:
+	sudo docker build -f message-worker/Dockerfile . -t chat-message-worker:latest
+	sudo kind load docker-image chat-message-worker:latest --name chat
+
+build-router:
+	sudo docker build -f router/Dockerfile . -t chat-router:latest
+	sudo kind load docker-image chat-router:latest --name chat
+
+build-all: build-gateway build-message-worker build-router
