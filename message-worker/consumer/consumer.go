@@ -26,9 +26,10 @@ type Consumer struct {
 	reader *kafka.Reader
 	cass   *store.Cassandra
 	pg     *store.Postgres
+	cache  *store.Redis
 }
 
-func New(brokers []string, groupID string, cass *store.Cassandra, pg *store.Postgres) *Consumer {
+func New(brokers []string, groupID string, cass *store.Cassandra, pg *store.Postgres, cache *store.Redis) *Consumer {
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:        brokers,
 		Topic:          "chat.messages",
@@ -37,7 +38,7 @@ func New(brokers []string, groupID string, cass *store.Cassandra, pg *store.Post
 		MaxWait:        500 * time.Millisecond,
 		CommitInterval: 0, // manual commit
 	})
-	return &Consumer{reader: r, cass: cass, pg: pg}
+	return &Consumer{reader: r, cass: cass, pg: pg, cache: cache}
 }
 
 const maxRetries = 3
@@ -113,6 +114,21 @@ func (c *Consumer) handle(ctx context.Context, msg kafka.Message) error {
 
 	if err := c.cass.PersistMessage(evt.RoomID, evt.MessageID, evt.SenderID, evt.Content, createdAt); err != nil {
 		return fmt.Errorf("cassandra write: %w", err)
+	}
+
+	// Write-through: push to Redis cache (best-effort, don't fail the message).
+	if c.cache != nil {
+		cached := store.CachedMessage{
+			MessageID:  evt.MessageID,
+			RoomID:     evt.RoomID,
+			SenderID:   evt.SenderID,
+			SenderName: evt.SenderName,
+			Content:    evt.Content,
+			CreatedAt:  evt.CreatedAt,
+		}
+		if err := c.cache.PushMessage(ctx, cached); err != nil {
+			log.Printf("cache push error msg=%d: %v", evt.MessageID, err)
+		}
 	}
 
 	log.Printf("persisted msg=%d room=%s sender=%s", evt.MessageID, evt.RoomID, evt.SenderID)

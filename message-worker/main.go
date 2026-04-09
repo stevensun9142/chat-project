@@ -44,10 +44,21 @@ func main() {
 	defer pg.Close()
 	log.Println("connected to postgres")
 
+	// Redis cache is optional — if not configured, write-through is skipped.
+	var cache *store.Redis
+	if redisAddr := os.Getenv("REDIS_CACHE_ADDR"); redisAddr != "" {
+		cache, err = store.NewRedis(redisAddr)
+		if err != nil {
+			log.Fatalf("redis-cache connect: %v", err)
+		}
+		defer cache.Close()
+		log.Printf("connected to redis-cache at %s", redisAddr)
+	}
+
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	c := consumer.New(brokers, groupID, cass, pg)
+	c := consumer.New(brokers, groupID, cass, pg, cache)
 	log.Printf("starting consumer group=%s topic=chat.messages", groupID)
 
 	if err := c.Run(ctx); err != nil {

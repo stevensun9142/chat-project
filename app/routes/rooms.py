@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.auth.utils import get_current_user
 from app.dao.cassandra.messages_dao import get_messages
+from app.dao.redis.cache import get_messages_cached
 from app.dao.postgres.rooms_dao import (
     add_members,
     create_room,
@@ -83,7 +84,7 @@ async def message_history(
     limit: int = Query(default=50, ge=1, le=200),
 ):
     await _verify_membership(room_id, user.id)
-    messages = get_messages(room_id, limit=limit)
+    messages = await get_messages_cached(room_id, limit, get_messages)
     return [
         MessageResponse(
             room_id=m.room_id,

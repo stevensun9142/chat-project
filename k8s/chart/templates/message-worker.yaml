@@ -27,3 +27,5 @@ spec:
               value: "9042"
             - name: CASS_KEYSPACE
               value: "chat"
+            - name: REDIS_CACHE_ADDR
+              value: "redis-cache:6379"

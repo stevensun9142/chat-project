@@ -42,7 +42,7 @@ test:
 
 # Run the Message Worker (Go)
 message-worker:
-	cd message-worker && KAFKA_BROKERS=localhost:9092,localhost:9093,localhost:9094 go run main.go
+	cd message-worker && KAFKA_BROKERS=localhost:9092,localhost:9093,localhost:9094 REDIS_CACHE_ADDR=localhost:6380 go run main.go
 
 # Run the Router (Go)
 router:

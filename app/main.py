@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.dao.cassandra.session import close_session, get_session
 from app.dao.postgres.pool import close_pool, get_pool
+from app.dao.redis.cache import close_redis, get_redis
 from app.routes.auth import router as auth_router
 from app.routes.rooms import router as rooms_router
 
@@ -13,7 +14,9 @@ from app.routes.rooms import router as rooms_router
 async def lifespan(app: FastAPI):
     await get_pool()
     get_session()
+    await get_redis()
     yield
+    await close_redis()
     await close_pool()
     close_session()
 

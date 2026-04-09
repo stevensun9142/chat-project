@@ -33,6 +33,10 @@ redis:
   storage: 512Mi
   nodePort: 30379
 
+redisCache:
+  image: redis:7.2
+  nodePort: 30380
+
 jwt:
   secret: change-me-in-prod
 

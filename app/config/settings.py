@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     cass_port: int = 9042
     cass_keyspace: str = "chat"
 
+    # Redis cache
+    redis_cache_url: str = "redis://localhost:6380/0"
+
     # Auth
     jwt_secret: str = "change-me-in-prod"
     jwt_expiry_minutes: int = 30

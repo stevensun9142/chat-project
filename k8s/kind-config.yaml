@@ -29,7 +29,11 @@ nodes:
       - containerPort: 30801
         hostPort: 8001
         protocol: TCP
-      # Redis
+      # Redis (presence)
       - containerPort: 30379
         hostPort: 6379
+        protocol: TCP
+      # Redis (cache)
+      - containerPort: 30380
+        hostPort: 6380
         protocol: TCP
