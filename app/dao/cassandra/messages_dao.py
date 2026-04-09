@@ -74,4 +74,5 @@ def get_messages(
             break
         bucket = _prev_week_bucket(bucket)
 
+    results.reverse()  # Cassandra returns newest-first; UI needs oldest-first
     return results
