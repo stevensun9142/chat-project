@@ -25,22 +25,22 @@ export default function Register() {
   }
 
   return (
-    <div style={{ maxWidth: 360, margin: "80px auto" }}>
-      <h2>Register</h2>
-      <form onSubmit={handleSubmit}>
-        <div>
-          <input placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} required />
-        </div>
-        <div>
-          <input placeholder="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
-        </div>
-        <div>
-          <input placeholder="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
-        </div>
-        {error && <p style={{ color: "red" }}>{error}</p>}
-        <button type="submit">Register</button>
-      </form>
-      <p>Already have an account? <Link to="/login">Login</Link></p>
+    <div className="auth-page">
+      <div className="auth-card">
+        <h2>Create an account</h2>
+        <p className="subtitle">Join the conversation</p>
+        <form onSubmit={handleSubmit}>
+          <label>Username</label>
+          <input value={username} onChange={e => setUsername(e.target.value)} required />
+          <label>Email</label>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+          <label>Password</label>
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+          {error && <p className="error-msg">{error}</p>}
+          <button type="submit">Register</button>
+          <p className="auth-footer">Already have an account? <Link to="/login">Log In</Link></p>
+        </form>
+      </div>
     </div>
   );
 }

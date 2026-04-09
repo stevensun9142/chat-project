@@ -1,3 +1,4 @@
+SHELL := /bin/bash
 HELM_CMD = sudo helm --kube-context kind-chat
 KUBECTL_CMD = sudo kubectl --context kind-chat -n chat
 
@@ -23,9 +24,9 @@ status:
 cassandra-schema:
 	$(KUBECTL_CMD) exec -i cassandra-0 -- cqlsh < schema/cassandra/init.cql
 
-# Run the Python API server locally
+# Run the Python API server locally (port 8000 reserved by Kind NodePort)
 api:
-	source .venv/bin/activate && uvicorn app.main:app --port 8000
+	source .venv/bin/activate && uvicorn app.main:app --port 8003
 
 # Run the Go gateway locally
 gateway:

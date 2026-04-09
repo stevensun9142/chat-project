@@ -23,19 +23,20 @@ export default function Login() {
   }
 
   return (
-    <div style={{ maxWidth: 360, margin: "80px auto" }}>
-      <h2>Login</h2>
-      <form onSubmit={handleSubmit}>
-        <div>
-          <input placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} required />
-        </div>
-        <div>
-          <input placeholder="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
-        </div>
-        {error && <p style={{ color: "red" }}>{error}</p>}
-        <button type="submit">Login</button>
-      </form>
-      <p>No account? <Link to="/register">Register</Link></p>
+    <div className="auth-page">
+      <div className="auth-card">
+        <h2>Welcome back!</h2>
+        <p className="subtitle">We're so excited to see you again!</p>
+        <form onSubmit={handleSubmit}>
+          <label>Username</label>
+          <input value={username} onChange={e => setUsername(e.target.value)} required />
+          <label>Password</label>
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+          {error && <p className="error-msg">{error}</p>}
+          <button type="submit">Log In</button>
+          <p className="auth-footer">Need an account? <Link to="/register">Register</Link></p>
+        </form>
+      </div>
     </div>
   );
 }

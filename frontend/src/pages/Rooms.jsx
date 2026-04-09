@@ -114,104 +114,128 @@ export default function Rooms() {
 
   const selectedRoomObj = rooms.find(r => r.id === selectedRoom);
 
+  const wsColor = wsStatus === "connected" ? "var(--online)" : wsStatus === "connecting" ? "var(--idle)" : "var(--offline)";
+
   return (
-    <div style={{ display: "flex", height: "100vh" }}>
-      {/* Sidebar */}
-      <div style={{ width: 260, borderRight: "1px solid #ccc", padding: 12, overflowY: "auto" }}>
-        <div style={{ marginBottom: 12 }}>
-          <strong>{user?.username}</strong>
-          <span style={{
-            display: "inline-block",
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            marginLeft: 8,
-            background: wsStatus === "connected" ? "#4caf50" : wsStatus === "connecting" ? "#ff9800" : "#f44336",
-          }} title={wsStatus} />
-          <button onClick={logout} style={{ marginLeft: 8, fontSize: 12 }}>Logout</button>
+    <div className="discord-app">
+      {/* Channel sidebar */}
+      <div className="channel-sidebar">
+        <div className="sidebar-header">Chat Rooms</div>
+
+        <div className="sidebar-section-title">Text Channels</div>
+
+        <div className="room-list">
+          {rooms.map(r => (
+            <div
+              key={r.id}
+              onClick={() => setSelectedRoom(r.id)}
+              className={`room-item${selectedRoom === r.id ? " selected" : ""}`}
+            >
+              <span className="room-name">{r.name}</span>
+              <button
+                className="btn-danger"
+                onClick={e => { e.stopPropagation(); handleLeaveRoom(r.id); }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
         </div>
 
-        <h3 style={{ margin: "8px 0" }}>Rooms</h3>
-        {rooms.map(r => (
-          <div
-            key={r.id}
-            onClick={() => setSelectedRoom(r.id)}
-            style={{
-              padding: "6px 8px",
-              cursor: "pointer",
-              background: selectedRoom === r.id ? "#e0e0ff" : "transparent",
-              borderRadius: 4,
-              marginBottom: 2,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <span>{r.name}</span>
-            <button
-              onClick={e => { e.stopPropagation(); handleLeaveRoom(r.id); }}
-              style={{ fontSize: 10, padding: "2px 4px" }}
-            >
-              Leave
-            </button>
-          </div>
-        ))}
+        {/* Create room */}
+        <div className="create-room-form">
+          <form onSubmit={handleCreateRoom}>
+            <input
+              placeholder="Room name"
+              value={newRoomName}
+              onChange={e => setNewRoomName(e.target.value)}
+              required
+            />
+            <input
+              placeholder="Member UUIDs (comma-sep)"
+              value={newMemberIds}
+              onChange={e => setNewMemberIds(e.target.value)}
+            />
+            <button type="submit">+ Create Room</button>
+          </form>
+        </div>
 
-        <hr />
-        <form onSubmit={handleCreateRoom}>
-          <input
-            placeholder="Room name"
-            value={newRoomName}
-            onChange={e => setNewRoomName(e.target.value)}
-            required
-            style={{ width: "100%", marginBottom: 4 }}
-          />
-          <input
-            placeholder="Member UUIDs (comma-sep)"
-            value={newMemberIds}
-            onChange={e => setNewMemberIds(e.target.value)}
-            style={{ width: "100%", marginBottom: 4, fontSize: 11 }}
-          />
-          <button type="submit" style={{ width: "100%" }}>Create Room</button>
-        </form>
+        {/* User panel */}
+        <div className="user-panel">
+          <div className="user-info">
+            <div className="user-avatar">
+              <img src="/avatar.svg" alt="avatar" className="avatar-img" />
+              <span className="status-dot" style={{ background: wsColor }} />
+            </div>
+            <div>
+              <div className="user-name">{user?.username}</div>
+              <div className="user-status">{wsStatus === "connected" ? "Online" : wsStatus === "connecting" ? "Connecting..." : "Offline"}</div>
+            </div>
+          </div>
+          <button className="btn-danger" onClick={logout} style={{ fontSize: 14 }} title="Logout">⏻</button>
+        </div>
       </div>
 
-      {/* Main area */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: 12 }}>
-        {error && <p style={{ color: "red" }}>{error}</p>}
+      {/* Chat area */}
+      <div className="chat-area">
+        {error && <div className="error-banner">{error}</div>}
 
         {selectedRoomObj ? (
           <>
-            <h2 style={{ margin: 0 }}>{selectedRoomObj.name}</h2>
+            {/* Chat header */}
+            <div className="chat-header">
+              <span className="channel-hash">#</span>
+              <span>{selectedRoomObj.name}</span>
+              <span className="divider" />
+              <span className="members-info">{members.length} member{members.length !== 1 ? "s" : ""}</span>
+            </div>
 
             {/* Members bar */}
-            <div style={{ fontSize: 12, color: "#666", marginBottom: 8 }}>
-              Members: {members.map(m => m.username).join(", ")}
-              <form onSubmit={handleAddMember} style={{ display: "inline", marginLeft: 12 }}>
+            <div className="members-bar">
+              <span>{members.map(m => m.username).join(", ")}</span>
+              <form onSubmit={handleAddMember} style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
                 <input
                   placeholder="Add by username"
                   value={addMemberId}
                   onChange={e => setAddMemberId(e.target.value)}
-                  style={{ fontSize: 11, width: 220 }}
                 />
-                <button type="submit" style={{ fontSize: 11 }}>Add</button>
+                <button className="btn-secondary" type="submit">Add</button>
               </form>
             </div>
 
             {/* Messages */}
-            <div style={{ flex: 1, overflowY: "auto", border: "1px solid #ddd", borderRadius: 4, padding: 8 }}>
+            <div className="messages-container">
               {messages.length === 0 ? (
-                <p style={{ color: "#999" }}>No messages yet.</p>
+                <div className="empty-state">
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 40, marginBottom: 8 }}>#</div>
+                    <div style={{ fontWeight: 600, fontSize: 18, color: "var(--text-primary)", marginBottom: 4 }}>Welcome to #{selectedRoomObj.name}</div>
+                    <div>This is the start of the #{selectedRoomObj.name} channel.</div>
+                  </div>
+                </div>
               ) : (
-                messages.map(m => {
+                messages.map((m, i) => {
                   const sender = members.find(mem => mem.id === m.sender_id);
-                  return (
-                    <div key={m.message_id} style={{ marginBottom: 8 }}>
-                      <strong>{sender?.username || m.sender_name || m.sender_id?.slice(0, 8)}</strong>
-                      <span style={{ fontSize: 11, color: "#999", marginLeft: 8 }}>
-                        {new Date(m.created_at).toLocaleString()}
-                      </span>
-                      <div>{m.content}</div>
+                  const displayName = sender?.username || m.sender_name || m.sender_id?.slice(0, 8);
+                  const prevMsg = messages[i - 1];
+                  const isGroupStart = !prevMsg || prevMsg.sender_id !== m.sender_id;
+
+                  return isGroupStart ? (
+                    <div key={m.message_id} className="message message-group-start">
+                      <div className="msg-avatar"><img src="/avatar.svg" alt="avatar" className="avatar-img" /></div>
+                      <div className="msg-body">
+                        <div className="msg-header">
+                          <span className="msg-author">{displayName}</span>
+                          <span className="msg-timestamp">{new Date(m.created_at).toLocaleString()}</span>
+                        </div>
+                        <div className="msg-content">{m.content}</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div key={m.message_id} className="message" style={{ paddingLeft: 56 }}>
+                      <div className="msg-body">
+                        <div className="msg-content">{m.content}</div>
+                      </div>
                     </div>
                   );
                 })
@@ -220,27 +244,34 @@ export default function Rooms() {
             </div>
 
             {/* Message input */}
-            <form
-              onSubmit={e => {
-                e.preventDefault();
-                if (!msgInput.trim()) return;
-                sendMessage(selectedRoom, msgInput.trim());
-                setMsgInput("");
-              }}
-              style={{ display: "flex", gap: 8, marginTop: 8 }}
-            >
-              <input
-                value={msgInput}
-                onChange={e => setMsgInput(e.target.value)}
-                placeholder={wsStatus === "connected" ? "Type a message..." : "Connecting..."}
-                disabled={wsStatus !== "connected"}
-                style={{ flex: 1, padding: "6px 8px" }}
-              />
-              <button type="submit" disabled={wsStatus !== "connected"}>Send</button>
-            </form>
+            <div className="chat-input-container">
+              <form
+                onSubmit={e => {
+                  e.preventDefault();
+                  if (!msgInput.trim()) return;
+                  sendMessage(selectedRoom, msgInput.trim());
+                  setMsgInput("");
+                }}
+                className="chat-input-wrapper"
+              >
+                <input
+                  value={msgInput}
+                  onChange={e => setMsgInput(e.target.value)}
+                  placeholder={wsStatus === "connected" ? `Message #${selectedRoomObj.name}` : "Connecting..."}
+                  disabled={wsStatus !== "connected"}
+                />
+                <button type="submit" disabled={wsStatus !== "connected"}>➤</button>
+              </form>
+            </div>
           </>
         ) : (
-          <p style={{ color: "#999", marginTop: 40 }}>Select a room from the sidebar.</p>
+          <div className="empty-state">
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>💬</div>
+              <div style={{ fontWeight: 600, fontSize: 20, color: "var(--text-primary)", marginBottom: 8 }}>Select a channel</div>
+              <div>Pick a room from the sidebar to start chatting.</div>
+            </div>
+          </div>
         )}
       </div>
     </div>
