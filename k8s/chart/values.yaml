@@ -28,6 +28,23 @@ router:
   image: chat-router:latest
   replicas: 1
 
+api:
+  image: chat-api:latest
+  replicas: 1
+  port: 8000
+  serviceType: NodePort
+  nodePort: 30800
+  corsOrigins: "*"
+
+frontend:
+  image: chat-frontend:latest
+  replicas: 1
+
+ingress:
+  enabled: false
+
+imagePullPolicy: Never
+
 redis:
   image: redis:7.2
   storage: 512Mi

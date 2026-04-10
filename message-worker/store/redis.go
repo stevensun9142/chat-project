@@ -42,9 +42,24 @@ func (r *Redis) Close() error {
 	return r.rdb.Close()
 }
 
-// PushMessage appends a message to the room's cache list, trims to the last
-// cacheLimit entries, and refreshes the TTL. Best-effort: errors are logged
-// by the caller but do not block the consumer.
+// pushIfExists is a Lua script that only appends to the list when the key
+// already exists. This avoids creating a partial cache entry for rooms that
+// haven't been cached yet (the read path is responsible for populating the
+// cache from Cassandra).
+var pushIfExists = redis.NewScript(`
+if redis.call("EXISTS", KEYS[1]) == 1 then
+  redis.call("RPUSH", KEYS[1], ARGV[1])
+  redis.call("LTRIM", KEYS[1], -tonumber(ARGV[2]), -1)
+  redis.call("EXPIRE", KEYS[1], ARGV[3])
+  return 1
+end
+return 0
+`)
+
+// PushMessage appends a message to the room's cache list only if the key
+// already exists. If the room isn't cached, this is a no-op — the read path
+// is responsible for populating the cache from Cassandra. Best-effort: errors
+// are logged by the caller but do not block the consumer.
 func (r *Redis) PushMessage(ctx context.Context, msg CachedMessage) error {
 	data, err := json.Marshal(msg)
 	if err != nil {
@@ -52,10 +67,15 @@ func (r *Redis) PushMessage(ctx context.Context, msg CachedMessage) error {
 	}
 
 	key := cachePrefix + msg.RoomID
-	pipe := r.rdb.Pipeline()
-	pipe.RPush(ctx, key, data)
-	pipe.LTrim(ctx, key, -cacheLimit, -1)
-	pipe.Expire(ctx, key, cacheTTL)
-	_, err = pipe.Exec(ctx)
+	_, err = pushIfExists.Run(ctx, r.rdb, []string{key},
+		data, cacheLimit, int(cacheTTL.Seconds()),
+	).Result()
 	return err
+}
+
+// Evict deletes the cached message list for a room. Called when a cache write
+// fails after a successful Cassandra persist — forces the next read to
+// repopulate from Cassandra rather than serving stale data.
+func (r *Redis) Evict(ctx context.Context, roomID string) error {
+	return r.rdb.Del(ctx, cachePrefix+roomID).Err()
 }

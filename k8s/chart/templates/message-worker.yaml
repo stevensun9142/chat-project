@@ -12,13 +12,13 @@ spec:
       labels:
         app: message-worker
     spec:
+{{ include "chat.imagePullSecrets" . }}
       containers:
-        - name: message-worker
           image: {{ .Values.messageWorker.image }}
-          imagePullPolicy: Never
+          imagePullPolicy: {{ .Values.imagePullPolicy | default "Never" }}
           env:
             - name: KAFKA_BROKERS
-              value: "kafka-1-0.kafka-headless:9092,kafka-2-0.kafka-headless:9092,kafka-3-0.kafka-headless:9092"
+              value: {{ include "chat.kafkaBrokers" $ | quote }}
             - name: PG_DSN
               value: "postgres://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@postgres:5432/{{ .Values.postgres.database }}?sslmode=disable"
             - name: CASS_HOSTS

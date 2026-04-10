@@ -15,7 +15,7 @@ spec:
     - name: controller
       port: 9091
       targetPort: 9091
-{{- range $i := list 0 1 2 }}
+{{- range $i := until (int $.Values.kafka.replicas) }}
 {{- $nodeId := add $i 1 }}
 {{- $externalPort := add 19092 $i }}
 ---
@@ -66,7 +66,7 @@ spec:
             - name: KAFKA_PROCESS_ROLES
               value: broker,controller
             - name: KAFKA_CONTROLLER_QUORUM_VOTERS
-              value: 1@kafka-1-0.kafka-headless:9091,2@kafka-2-0.kafka-headless:9091,3@kafka-3-0.kafka-headless:9091
+              value: "{{- range $j := until (int $.Values.kafka.replicas) }}{{- if $j }},{{ end }}{{ add $j 1 }}@kafka-{{ add $j 1 }}-0.kafka-headless:9091{{- end }}"
             - name: KAFKA_LISTENERS
               value: PLAINTEXT://:9092,CONTROLLER://:9091,EXTERNAL://:{{ $externalPort }}
             - name: KAFKA_ADVERTISED_LISTENERS

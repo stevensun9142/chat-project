@@ -12,13 +12,13 @@ spec:
       labels:
         app: router
     spec:
+{{ include "chat.imagePullSecrets" . }}
       containers:
-        - name: router
           image: {{ .Values.router.image }}
-          imagePullPolicy: Never
+          imagePullPolicy: {{ .Values.imagePullPolicy | default "Never" }}
           env:
             - name: KAFKA_BROKERS
-              value: "kafka-1-0.kafka-headless:9092,kafka-2-0.kafka-headless:9092,kafka-3-0.kafka-headless:9092"
+              value: {{ include "chat.kafkaBrokers" $ | quote }}
             - name: REDIS_ADDR
               value: "redis:6379"
             - name: PG_DSN

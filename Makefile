@@ -2,7 +2,7 @@ SHELL := /bin/bash
 HELM_CMD = sudo helm --kube-context kind-chat
 KUBECTL_CMD = sudo kubectl --context kind-chat -n chat
 
-.PHONY: deploy upgrade status pods logs-gateway cassandra-schema api gateway frontend test message-worker test-gateway test-message-worker router test-router test-e2e build-gateway build-message-worker build-router build-all
+.PHONY: deploy upgrade status pods logs-gateway cassandra-schema api gateway frontend test message-worker test-gateway test-message-worker router test-router test-e2e build-gateway build-message-worker build-router build-api build-frontend build-all cloud-build-gateway cloud-build-message-worker cloud-build-router cloud-build-api cloud-build-frontend cloud-build-all cloud-deploy cloud-upgrade
 
 # First-time install (build images, load into Kind, deploy via Helm)
 deploy: build-all
@@ -77,4 +77,44 @@ build-router:
 	sudo docker build -f router/Dockerfile . -t chat-router:latest
 	sudo kind load docker-image chat-router:latest --name chat
 
-build-all: build-gateway build-message-worker build-router
+build-all: build-gateway build-message-worker build-router build-api build-frontend
+
+build-api:
+	sudo docker build -f app/Dockerfile . -t chat-api:latest
+	sudo kind load docker-image chat-api:latest --name chat
+
+build-frontend:
+	sudo docker build -f frontend/Dockerfile . -t chat-frontend:latest
+	sudo kind load docker-image chat-frontend:latest --name chat
+
+# --- Cloud (Oracle ARM64 + OCIR) ---
+# Set these before running cloud targets:
+#   export OCIR_REGION=us-ashburn-1
+#   export OCIR_TENANCY=your-tenancy-namespace
+OCIR_PREFIX = $(OCIR_REGION).ocir.io/$(OCIR_TENANCY)
+
+cloud-build-gateway:
+	docker buildx build --platform linux/arm64 -f gateway/Dockerfile . -t $(OCIR_PREFIX)/chat-gateway:latest --push
+
+cloud-build-message-worker:
+	docker buildx build --platform linux/arm64 -f message-worker/Dockerfile . -t $(OCIR_PREFIX)/chat-message-worker:latest --push
+
+cloud-build-router:
+	docker buildx build --platform linux/arm64 -f router/Dockerfile . -t $(OCIR_PREFIX)/chat-router:latest --push
+
+cloud-build-api:
+	docker buildx build --platform linux/arm64 -f app/Dockerfile . -t $(OCIR_PREFIX)/chat-api:latest --push
+
+cloud-build-frontend:
+	docker buildx build --platform linux/arm64 -f frontend/Dockerfile . \
+		--build-arg VITE_API_URL=/api \
+		--build-arg VITE_WS_URL=ws://$(CLOUD_IP)/ws \
+		-t $(OCIR_PREFIX)/chat-frontend:latest --push
+
+cloud-build-all: cloud-build-gateway cloud-build-message-worker cloud-build-router cloud-build-api cloud-build-frontend
+
+cloud-deploy:
+	helm install chat k8s/chart/ -n chat --create-namespace -f k8s/values-cloud.yaml
+
+cloud-upgrade:
+	helm upgrade chat k8s/chart/ -n chat -f k8s/values-cloud.yaml

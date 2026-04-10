@@ -26,10 +26,10 @@ spec:
       labels:
         app: gateway
     spec:
+{{ include "chat.imagePullSecrets" . }}
       containers:
-        - name: gateway
           image: {{ .Values.gateway.image }}
-          imagePullPolicy: Never
+          imagePullPolicy: {{ .Values.imagePullPolicy | default "Never" }}
           ports:
             - containerPort: {{ .Values.gateway.port }}
             - containerPort: {{ .Values.gateway.grpcPort }}
@@ -44,7 +44,7 @@ spec:
                   name: jwt-secret
                   key: jwt-secret
             - name: KAFKA_BROKERS
-              value: "kafka-1-0.kafka-headless:9092,kafka-2-0.kafka-headless:9092,kafka-3-0.kafka-headless:9092"
+              value: {{ include "chat.kafkaBrokers" $ | quote }}
           readinessProbe:
             tcpSocket:
               port: {{ .Values.gateway.port }}

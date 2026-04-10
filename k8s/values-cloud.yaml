@@ -1,0 +1,81 @@
+# values-cloud.yaml — Oracle Cloud Free Tier (ARM64 k3s) overlay
+# Usage: helm install chat k8s/chart/ -n chat --create-namespace -f k8s/values-cloud.yaml
+#
+# Replace <REGION> with your OCI region key (e.g., us-ashburn-1)
+# Replace <TENANCY> with your OCIR tenancy namespace
+
+imagePullPolicy: IfNotPresent
+imagePullSecret: ocir-secret
+
+# --- Container images (OCIR) ---
+gateway:
+  image: <REGION>.ocir.io/<TENANCY>/chat-gateway:latest
+  replicas: 1
+
+messageWorker:
+  image: <REGION>.ocir.io/<TENANCY>/chat-message-worker:latest
+  replicas: 1
+
+router:
+  image: <REGION>.ocir.io/<TENANCY>/chat-router:latest
+  replicas: 1
+
+api:
+  image: <REGION>.ocir.io/<TENANCY>/chat-api:latest
+  replicas: 1
+  port: 8000
+  serviceType: ClusterIP
+  nodePort: null
+  corsOrigins: "*"
+
+frontend:
+  image: <REGION>.ocir.io/<TENANCY>/chat-frontend:latest
+  replicas: 1
+
+# --- Ingress (nginx, least-connections for WebSocket) ---
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/load-balance: "least_conn"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/upstream-hash-by: ""
+
+# --- Secrets (override in deployment, NOT in git) ---
+jwt:
+  secret: CHANGE-ME-IN-PROD
+
+# --- Single Kafka broker (saves ~2GB RAM) ---
+kafka:
+  image: apache/kafka:3.7.1
+  replicas: 1
+  heapOpts: "-Xmx256m -Xms256m"
+  storage: 2Gi
+  nodePorts:
+    - 30092
+  topics:
+    - name: chat.messages
+      partitions: 3
+      replicationFactor: 1
+    - name: chat.delivery
+      partitions: 3
+      replicationFactor: 1
+    - name: presence.events
+      partitions: 3
+      replicationFactor: 1
+
+# --- Smaller storage for free tier ---
+postgres:
+  image: postgres:16
+  storage: 5Gi
+
+cassandra:
+  image: cassandra:4.1
+  storage: 5Gi
+
+redis:
+  image: redis:7.2
+  storage: 256Mi

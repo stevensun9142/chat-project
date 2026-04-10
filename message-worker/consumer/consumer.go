@@ -127,7 +127,10 @@ func (c *Consumer) handle(ctx context.Context, msg kafka.Message) error {
 			CreatedAt:  evt.CreatedAt,
 		}
 		if err := c.cache.PushMessage(ctx, cached); err != nil {
-			log.Printf("cache push error msg=%d: %v", evt.MessageID, err)
+			log.Printf("cache push error msg=%d, evicting key: %v", evt.MessageID, err)
+			if evictErr := c.cache.Evict(ctx, evt.RoomID); evictErr != nil {
+				log.Printf("cache evict error room=%s: %v", evt.RoomID, evictErr)
+			}
 		}
 	}
 
