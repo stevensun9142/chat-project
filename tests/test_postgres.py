@@ -18,6 +18,7 @@ async def _setup_teardown():
     yield
     # Clean up in dependency order
     await pool.execute("DELETE FROM refresh_tokens")
+    await pool.execute("DELETE FROM friendships")
     await pool.execute("DELETE FROM read_positions")
     await pool.execute("DELETE FROM room_members")
     await pool.execute("DELETE FROM rooms")

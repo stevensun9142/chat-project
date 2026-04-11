@@ -40,6 +40,17 @@ CREATE TABLE refresh_tokens (
 
 CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
 
+-- Friendships (bidirectional on accept)
+CREATE TABLE friendships (
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    friend_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status      VARCHAR(10) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted')),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, friend_id)
+);
+
+CREATE INDEX idx_friendships_friend ON friendships(friend_id);
+
 -- Read positions (last-read pointer for durable unread counts)
 CREATE TABLE read_positions (
     user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

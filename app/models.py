@@ -34,3 +34,11 @@ class Message:
     sender_id: UUID
     content: str
     created_at: datetime
+
+
+@dataclass(frozen=True)
+class Friendship:
+    user_id: UUID
+    friend_id: UUID
+    status: str
+    created_at: datetime

@@ -8,6 +8,7 @@ from app.dao.cassandra.session import close_session, get_session
 from app.dao.postgres.pool import close_pool, get_pool
 from app.dao.redis.cache import close_redis, get_redis
 from app.routes.auth import router as auth_router
+from app.routes.friends import router as friends_router
 from app.routes.rooms import router as rooms_router
 
 
@@ -31,4 +32,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(auth_router)
+app.include_router(friends_router)
 app.include_router(rooms_router)

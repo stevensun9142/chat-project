@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.auth.utils import get_current_user
 from app.dao.cassandra.messages_dao import count_messages_since, get_messages
 from app.dao.redis.cache import ack_unread, evict_room_members, get_messages_cached, get_unread_counts
+from app.dao.postgres.friendships_dao import are_friends
 from app.dao.postgres.read_positions_dao import get_read_positions, upsert_read_position
 from app.dao.postgres.rooms_dao import (
     add_members,
@@ -36,6 +37,14 @@ async def _verify_membership(room_id: UUID, user_id: UUID) -> None:
 
 @router.post("", response_model=RoomResponse, status_code=status.HTTP_201_CREATED)
 async def create(body: RoomCreateRequest, user: User = Depends(get_current_user)):
+    for member_id in body.member_ids:
+        if member_id == user.id:
+            continue
+        if not await are_friends(user.id, member_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"User {member_id} is not your friend",
+            )
     room = await create_room(body.name, user.id, body.member_ids)
     return RoomResponse(id=room.id, name=room.name, created_by=room.created_by, created_at=room.created_at)
 
@@ -70,6 +79,11 @@ async def add_room_members(room_id: UUID, body: RoomAddMembersRequest, user: Use
         found = await get_user_by_username(username)
         if found is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User '{username}' not found")
+        if not await are_friends(user.id, found.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"'{username}' is not your friend",
+            )
         user_ids.append(found.id)
     await add_members(room_id, user_ids)
     await evict_room_members(room_id)

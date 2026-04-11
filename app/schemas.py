@@ -72,3 +72,21 @@ class MessageResponse(BaseModel):
 
 class UnreadCountsResponse(BaseModel):
     counts: dict[str, int]
+
+
+# --- Friends ---
+
+class FriendRequest(BaseModel):
+    username: str
+
+
+class FriendResponse(BaseModel):
+    id: UUID
+    username: str
+    created_at: datetime
+
+
+class FriendRequestResponse(BaseModel):
+    id: UUID
+    username: str
+    created_at: datetime

@@ -31,6 +31,14 @@ data:
         created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
+    CREATE TABLE friendships (
+        user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        friend_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status      VARCHAR(10) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted')),
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (user_id, friend_id)
+    );
+    CREATE INDEX idx_friendships_friend ON friendships(friend_id);
     CREATE TABLE read_positions (
         user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         room_id     UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
@@ -68,6 +76,14 @@ data:
         created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
+    CREATE TABLE friendships (
+        user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        friend_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status      VARCHAR(10) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted')),
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (user_id, friend_id)
+    );
+    CREATE INDEX idx_friendships_friend ON friendships(friend_id);
     CREATE TABLE read_positions (
         user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         room_id     UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,

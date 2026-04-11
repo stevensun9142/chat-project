@@ -147,6 +147,9 @@ button:disabled {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .room-list {
@@ -454,23 +457,223 @@ button:disabled {
   font-size: 16px;
 }
 
-/* --- Create room form in sidebar --- */
-.create-room-form {
-  padding: 8px;
-  border-top: 1px solid var(--bg-tertiary);
+/* --- Create room button --- */
+.btn-create-room {
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  font-weight: 700;
+  padding: 0 4px;
+  cursor: pointer;
+  border: none;
+  line-height: 1;
 }
-.create-room-form input {
+.btn-create-room:hover {
+  color: var(--text-primary);
+  background: transparent;
+}
+
+/* --- Sidebar tabs --- */
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+.sidebar-tab {
+  flex: 1;
+  padding: 8px 0;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.sidebar-tab:hover {
+  color: var(--text-primary);
+  background: transparent;
+}
+.sidebar-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+  background: transparent;
+}
+.tab-badge {
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 8px;
+  padding: 0 4px;
+}
+
+/* --- Friends panel --- */
+.friends-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px;
+}
+.friends-search {
+  padding: 8px 0;
+}
+.friends-search input {
   width: 100%;
-  margin-bottom: 4px;
   padding: 6px 10px;
   font-size: 12px;
   background: var(--input-bg);
   border-radius: 4px;
 }
-.create-room-form button {
-  width: 100%;
-  padding: 6px;
+.friends-search-results {
+  margin-top: 4px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.friend-search-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.friend-search-item:hover {
+  background: var(--hover);
+}
+.friends-list {
+  padding: 2px 0;
+}
+.friend-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.friend-item:hover {
+  background: var(--hover);
+}
+.friend-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.friend-actions {
+  display: flex;
+  gap: 2px;
+}
+.btn-accept {
+  background: var(--online);
+  color: #fff;
   font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+}
+.btn-accept:hover {
+  background: #2d8e4a;
+}
+.empty-friends {
+  padding: 12px 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* --- Modal --- */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal {
+  background: var(--bg-primary);
+  border-radius: 8px;
+  width: 400px;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 16px;
+  border: 1px solid var(--bg-tertiary);
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+.modal-input {
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  background: var(--input-bg);
+  border-radius: 4px;
+  border: none;
+  color: var(--text-primary);
+}
+.modal-search-results {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+.selected-friends {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.selected-friend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--selected);
+  color: var(--text-primary);
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+.selected-friend-chip button {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+.selected-friend-chip button:hover {
+  color: var(--danger);
+  background: transparent;
+}
+.modal-submit {
+  width: 100%;
+  padding: 8px;
+  font-size: 14px;
+  margin-top: 4px;
 }
 
 /* --- Members bar --- */

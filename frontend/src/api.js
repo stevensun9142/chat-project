@@ -57,3 +57,22 @@ export const getUnreadCounts = (token) =>
 
 export const ackUnread = (roomId, token) =>
   request(`/rooms/${roomId}/ack`, { method: "POST", token });
+
+// Friends
+export const listFriends = (token) =>
+  request("/friends", { token });
+
+export const listFriendRequests = (token) =>
+  request("/friends/requests", { token });
+
+export const searchUsers = (q, token) =>
+  request(`/friends/search?q=${encodeURIComponent(q)}`, { token });
+
+export const sendFriendRequest = (username, token) =>
+  request("/friends/request", { method: "POST", body: { username }, token });
+
+export const acceptFriendRequest = (username, token) =>
+  request("/friends/accept", { method: "POST", body: { username }, token });
+
+export const removeFriend = (username, token) =>
+  request(`/friends/${encodeURIComponent(username)}`, { method: "DELETE", token });

@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "../auth";
 import { useWebSocket } from "../useWebSocket";
-import { listRooms, createRoom, getMessages, getMembers, leaveRoom, addMembers, getUnreadCounts, ackUnread } from "../api";
+import {
+  listRooms, createRoom, getMessages, getMembers, leaveRoom, addMembers,
+  getUnreadCounts, ackUnread,
+  listFriends, listFriendRequests, searchUsers, sendFriendRequest, acceptFriendRequest, removeFriend,
+} from "../api";
 
 export default function Rooms() {
   const { accessToken, user, logout } = useAuth();
@@ -9,14 +13,28 @@ export default function Rooms() {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const [members, setMembers] = useState([]);
-  const [newRoomName, setNewRoomName] = useState("");
-  const [newMemberIds, setNewMemberIds] = useState("");
   const [addMemberId, setAddMemberId] = useState("");
   const [error, setError] = useState("");
   const [msgInput, setMsgInput] = useState("");
   const [unreadCounts, setUnreadCounts] = useState({});
   const messagesEndRef = useRef(null);
   const selectedRoomRef = useRef(selectedRoom);
+
+  // Sidebar tab: "rooms" or "friends"
+  const [sidebarTab, setSidebarTab] = useState("rooms");
+
+  // Friends state
+  const [friends, setFriends] = useState([]);
+  const [friendRequests, setFriendRequests] = useState([]);
+  const [friendSearch, setFriendSearch] = useState("");
+  const [friendSearchResults, setFriendSearchResults] = useState([]);
+
+  // Create room modal
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newRoomName, setNewRoomName] = useState("");
+  const [createSearch, setCreateSearch] = useState("");
+  const [createSearchResults, setCreateSearchResults] = useState([]);
+  const [selectedFriends, setSelectedFriends] = useState([]);
 
   useEffect(() => { selectedRoomRef.current = selectedRoom; }, [selectedRoom]);
 
@@ -94,6 +112,7 @@ export default function Rooms() {
   useEffect(() => {
     loadRooms();
     loadUnreadCounts();
+    loadFriendRequests();
   }, []);
 
   useEffect(() => {
@@ -117,13 +136,12 @@ export default function Rooms() {
     e.preventDefault();
     setError("");
     try {
-      const memberIds = newMemberIds
-        .split(",")
-        .map(s => s.trim())
-        .filter(Boolean);
-      await createRoom(newRoomName, memberIds, accessToken);
+      await createRoom(newRoomName, selectedFriends.map(f => f.id), accessToken);
       setNewRoomName("");
-      setNewMemberIds("");
+      setSelectedFriends([]);
+      setCreateSearch("");
+      setCreateSearchResults([]);
+      setShowCreateModal(false);
       loadRooms();
     } catch (err) {
       setError(err.detail || "Failed to create room");
@@ -158,6 +176,83 @@ export default function Rooms() {
 
   const selectedRoomObj = rooms.find(r => r.id === selectedRoom);
 
+  // --- Friends functions ---
+  async function loadFriends() {
+    try {
+      const data = await listFriends(accessToken);
+      setFriends(data);
+    } catch { /* best-effort */ }
+  }
+
+  async function loadFriendRequests() {
+    try {
+      const data = await listFriendRequests(accessToken);
+      setFriendRequests(data);
+    } catch { /* best-effort */ }
+  }
+
+  useEffect(() => {
+    if (sidebarTab === "friends") {
+      loadFriends();
+      loadFriendRequests();
+    }
+  }, [sidebarTab]);
+
+  useEffect(() => {
+    if (!friendSearch.trim()) { setFriendSearchResults([]); return; }
+    const timeout = setTimeout(async () => {
+      try {
+        const results = await searchUsers(friendSearch.trim(), accessToken);
+        setFriendSearchResults(results);
+      } catch { setFriendSearchResults([]); }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [friendSearch]);
+
+  useEffect(() => {
+    if (!createSearch.trim()) { setCreateSearchResults([]); return; }
+    const timeout = setTimeout(async () => {
+      try {
+        const results = await listFriends(accessToken);
+        setCreateSearchResults(results.filter(f =>
+          f.username.toLowerCase().includes(createSearch.trim().toLowerCase()) &&
+          !selectedFriends.some(s => s.id === f.id)
+        ));
+      } catch { setCreateSearchResults([]); }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [createSearch, selectedFriends]);
+
+  async function handleSendFriendRequest(username) {
+    try {
+      await sendFriendRequest(username, accessToken);
+      setFriendSearch("");
+      setFriendSearchResults([]);
+    } catch (err) {
+      setError(err.detail || "Failed to send request");
+    }
+  }
+
+  async function handleAcceptRequest(username) {
+    try {
+      await acceptFriendRequest(username, accessToken);
+      loadFriends();
+      loadFriendRequests();
+    } catch (err) {
+      setError(err.detail || "Failed to accept request");
+    }
+  }
+
+  async function handleRemoveFriend(username) {
+    try {
+      await removeFriend(username, accessToken);
+      loadFriends();
+      loadFriendRequests();
+    } catch (err) {
+      setError(err.detail || "Failed to remove friend");
+    }
+  }
+
   function handleRetry(msg) {
     const nonce = crypto.randomUUID();
     setMessages(prev => prev.map(m =>
@@ -171,51 +266,100 @@ export default function Rooms() {
   const wsColor = wsStatus === "connected" ? "var(--online)" : wsStatus === "connecting" ? "var(--idle)" : "var(--offline)";
 
   return (
+    <>
     <div className="discord-app">
       {/* Channel sidebar */}
       <div className="channel-sidebar">
         <div className="sidebar-header">Chat Rooms</div>
 
-        <div className="sidebar-section-title">Text Channels</div>
+        {/* Sidebar tabs */}
+        <div className="sidebar-tabs">
+          <button className={`sidebar-tab${sidebarTab === "rooms" ? " active" : ""}`} onClick={() => setSidebarTab("rooms")}>Rooms</button>
+          <button className={`sidebar-tab${sidebarTab === "friends" ? " active" : ""}`} onClick={() => setSidebarTab("friends")}>
+            Friends{friendRequests.length > 0 && <span className="tab-badge">{friendRequests.length}</span>}
+          </button>
+        </div>
 
-        <div className="room-list">
-          {rooms.map(r => (
-            <div
-              key={r.id}
-              onClick={() => setSelectedRoom(r.id)}
-              className={`room-item${selectedRoom === r.id ? " selected" : ""}`}
-            >
-              <span className="room-name">{r.name}</span>
-              {unreadCounts[r.id] > 0 && (
-                <span className="unread-badge">{unreadCounts[r.id]}</span>
-              )}
-              <button
-                className="btn-danger"
-                onClick={e => { e.stopPropagation(); handleLeaveRoom(r.id); }}
-              >
-                ✕
-              </button>
+        {sidebarTab === "rooms" ? (
+          <>
+            <div className="sidebar-section-title">
+              Text Channels
+              <button className="btn-create-room" onClick={() => setShowCreateModal(true)} title="Create Room">+</button>
             </div>
-          ))}
-        </div>
 
-        {/* Create room */}
-        <div className="create-room-form">
-          <form onSubmit={handleCreateRoom}>
-            <input
-              placeholder="Room name"
-              value={newRoomName}
-              onChange={e => setNewRoomName(e.target.value)}
-              required
-            />
-            <input
-              placeholder="Member UUIDs (comma-sep)"
-              value={newMemberIds}
-              onChange={e => setNewMemberIds(e.target.value)}
-            />
-            <button type="submit">+ Create Room</button>
-          </form>
-        </div>
+            <div className="room-list">
+              {rooms.map(r => (
+                <div
+                  key={r.id}
+                  onClick={() => setSelectedRoom(r.id)}
+                  className={`room-item${selectedRoom === r.id ? " selected" : ""}`}
+                >
+                  <span className="room-name">{r.name}</span>
+                  {unreadCounts[r.id] > 0 && (
+                    <span className="unread-badge">{unreadCounts[r.id]}</span>
+                  )}
+                  <button
+                    className="btn-danger"
+                    onClick={e => { e.stopPropagation(); handleLeaveRoom(r.id); }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="friends-panel">
+            {/* Search users to add */}
+            <div className="friends-search">
+              <input
+                placeholder="Search users to add..."
+                value={friendSearch}
+                onChange={e => setFriendSearch(e.target.value)}
+              />
+              {friendSearchResults.length > 0 && (
+                <div className="friends-search-results">
+                  {friendSearchResults.map(u => (
+                    <div key={u.id} className="friend-search-item">
+                      <span>{u.username}</span>
+                      <button className="btn-secondary" onClick={() => handleSendFriendRequest(u.username)}>Add</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Incoming requests */}
+            {friendRequests.length > 0 && (
+              <>
+                <div className="sidebar-section-title">Incoming Requests</div>
+                <div className="friends-list">
+                  {friendRequests.map(r => (
+                    <div key={r.id} className="friend-item">
+                      <span className="friend-name">{r.username}</span>
+                      <div className="friend-actions">
+                        <button className="btn-accept" onClick={() => handleAcceptRequest(r.username)}>✓</button>
+                        <button className="btn-danger" onClick={() => handleRemoveFriend(r.username)}>✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Friends list */}
+            <div className="sidebar-section-title">Friends — {friends.length}</div>
+            <div className="friends-list">
+              {friends.map(f => (
+                <div key={f.id} className="friend-item">
+                  <span className="friend-name">{f.username}</span>
+                  <button className="btn-danger" onClick={() => handleRemoveFriend(f.username)} title="Remove friend">✕</button>
+                </div>
+              ))}
+              {friends.length === 0 && <div className="empty-friends">No friends yet</div>}
+            </div>
+          </div>
+        )}
 
         {/* User panel */}
         <div className="user-panel">
@@ -252,7 +396,7 @@ export default function Rooms() {
               <span>{members.map(m => m.username).join(", ")}</span>
               <form onSubmit={handleAddMember} style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
                 <input
-                  placeholder="Add by username"
+                  placeholder="Add friend by username"
                   value={addMemberId}
                   onChange={e => setAddMemberId(e.target.value)}
                 />
@@ -356,5 +500,59 @@ export default function Rooms() {
         )}
       </div>
     </div>
+
+    {/* Create room modal */}
+    {showCreateModal && (
+      <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+        <div className="modal" onClick={e => e.stopPropagation()}>
+          <div className="modal-header">
+            <span>Create Room</span>
+            <button className="btn-danger" onClick={() => setShowCreateModal(false)}>✕</button>
+          </div>
+          <form onSubmit={handleCreateRoom}>
+            <input
+              className="modal-input"
+              placeholder="Room name"
+              value={newRoomName}
+              onChange={e => setNewRoomName(e.target.value)}
+              required
+              autoFocus
+            />
+            <input
+              className="modal-input"
+              placeholder="Search friends to add..."
+              value={createSearch}
+              onChange={e => setCreateSearch(e.target.value)}
+            />
+            {createSearchResults.length > 0 && (
+              <div className="modal-search-results">
+                {createSearchResults.map(f => (
+                  <div key={f.id} className="friend-search-item" onClick={() => {
+                    setSelectedFriends(prev => [...prev, f]);
+                    setCreateSearch("");
+                    setCreateSearchResults([]);
+                  }}>
+                    <span>{f.username}</span>
+                    <span style={{ color: "var(--text-muted)", fontSize: 12 }}>click to add</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {selectedFriends.length > 0 && (
+              <div className="selected-friends">
+                {selectedFriends.map(f => (
+                  <span key={f.id} className="selected-friend-chip">
+                    {f.username}
+                    <button type="button" onClick={() => setSelectedFriends(prev => prev.filter(s => s.id !== f.id))}>✕</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <button className="modal-submit" type="submit">Create</button>
+          </form>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
