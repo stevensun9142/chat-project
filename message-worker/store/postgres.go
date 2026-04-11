@@ -46,3 +46,25 @@ func (p *Postgres) IsRoomMember(ctx context.Context, roomID, userID string) (boo
 	}
 	return true, nil
 }
+
+// GetRoomMemberIDs returns all user_id values for a given room.
+func (p *Postgres) GetRoomMemberIDs(ctx context.Context, roomID string) ([]string, error) {
+	rows, err := p.db.QueryContext(ctx,
+		"SELECT user_id FROM room_members WHERE room_id = $1",
+		roomID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get room members: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan member id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}

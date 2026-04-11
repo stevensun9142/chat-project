@@ -26,6 +26,7 @@ spec:
     spec:
 {{ include "chat.imagePullSecrets" . }}
       containers:
+        - name: frontend
           image: {{ .Values.frontend.image }}
           imagePullPolicy: {{ .Values.imagePullPolicy | default "Never" }}
           ports:

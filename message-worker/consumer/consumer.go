@@ -132,6 +132,34 @@ func (c *Consumer) handle(ctx context.Context, msg kafka.Message) error {
 				log.Printf("cache evict error room=%s: %v", evt.RoomID, evictErr)
 			}
 		}
+
+		// Increment unread counts for all room members except the sender.
+		memberIDs, err := c.cache.GetRoomMemberIDsCached(ctx, evt.RoomID)
+		if err != nil {
+			log.Printf("cache member lookup error room=%s: %v", evt.RoomID, err)
+			memberIDs = nil // fall through to Postgres
+		}
+		if memberIDs == nil {
+			memberIDs, err = c.pg.GetRoomMemberIDs(ctx, evt.RoomID)
+			if err != nil {
+				log.Printf("get room members error room=%s: %v", evt.RoomID, err)
+			} else {
+				if cacheErr := c.cache.CacheRoomMemberIDs(ctx, evt.RoomID, memberIDs); cacheErr != nil {
+					log.Printf("cache member store error room=%s: %v", evt.RoomID, cacheErr)
+				}
+			}
+		}
+		if memberIDs != nil {
+			var recipients []string
+			for _, id := range memberIDs {
+				if id != evt.SenderID {
+					recipients = append(recipients, id)
+				}
+			}
+			if err := c.cache.IncrementUnread(ctx, evt.RoomID, recipients); err != nil {
+				log.Printf("unread increment error room=%s: %v", evt.RoomID, err)
+			}
+		}
 	}
 
 	log.Printf("persisted msg=%d room=%s sender=%s", evt.MessageID, evt.RoomID, evt.SenderID)

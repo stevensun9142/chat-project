@@ -79,3 +79,60 @@ func (r *Redis) PushMessage(ctx context.Context, msg CachedMessage) error {
 func (r *Redis) Evict(ctx context.Context, roomID string) error {
 	return r.rdb.Del(ctx, cachePrefix+roomID).Err()
 }
+
+const unreadPrefix = "unread:"
+
+// IncrementUnread increments the unread count for a set of users in a room.
+// Pipelined HINCRBY — one round-trip for all members.
+func (r *Redis) IncrementUnread(ctx context.Context, roomID string, userIDs []string) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+	pipe := r.rdb.Pipeline()
+	for _, uid := range userIDs {
+		pipe.HIncrBy(ctx, unreadPrefix+uid, roomID, 1)
+	}
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
+const (
+	membersPrefix = "members:"
+	membersTTL    = 5 * time.Minute
+)
+
+// GetRoomMemberIDsCached returns cached member IDs for a room, or nil on miss.
+func (r *Redis) GetRoomMemberIDsCached(ctx context.Context, roomID string) ([]string, error) {
+	key := membersPrefix + roomID
+	ids, err := r.rdb.SMembers(ctx, key).Result()
+	if err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return nil, nil // cache miss
+	}
+	return ids, nil
+}
+
+// CacheRoomMemberIDs stores room member IDs as a Redis SET with TTL.
+func (r *Redis) CacheRoomMemberIDs(ctx context.Context, roomID string, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	key := membersPrefix + roomID
+	pipe := r.rdb.Pipeline()
+	pipe.Del(ctx, key)
+	members := make([]interface{}, len(ids))
+	for i, id := range ids {
+		members[i] = id
+	}
+	pipe.SAdd(ctx, key, members...)
+	pipe.Expire(ctx, key, membersTTL)
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
+// EvictRoomMembers removes the cached member set for a room.
+func (r *Redis) EvictRoomMembers(ctx context.Context, roomID string) error {
+	return r.rdb.Del(ctx, membersPrefix+roomID).Err()
+}

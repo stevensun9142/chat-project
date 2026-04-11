@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.auth.utils import get_current_user
 from app.dao.cassandra.messages_dao import get_messages
-from app.dao.redis.cache import get_messages_cached
+from app.dao.redis.cache import ack_unread, evict_room_members, get_messages_cached, get_unread_counts
 from app.dao.postgres.rooms_dao import (
     add_members,
     create_room,
@@ -21,6 +21,7 @@ from app.schemas import (
     RoomAddMembersRequest,
     RoomCreateRequest,
     RoomResponse,
+    UnreadCountsResponse,
 )
 
 router = APIRouter(prefix="/rooms", tags=["rooms"])
@@ -70,11 +71,13 @@ async def add_room_members(room_id: UUID, body: RoomAddMembersRequest, user: Use
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User '{username}' not found")
         user_ids.append(found.id)
     await add_members(room_id, user_ids)
+    await evict_room_members(room_id)
 
 
 @router.delete("/{room_id}/members", status_code=status.HTTP_204_NO_CONTENT)
 async def leave(room_id: UUID, user: User = Depends(get_current_user)):
     await leave_room(room_id, user.id)
+    await evict_room_members(room_id)
 
 
 @router.get("/{room_id}/messages", response_model=list[MessageResponse])
@@ -95,3 +98,14 @@ async def message_history(
         )
         for m in messages
     ]
+
+
+@router.get("/unread", response_model=UnreadCountsResponse)
+async def unread_counts(user: User = Depends(get_current_user)):
+    counts = await get_unread_counts(user.id)
+    return UnreadCountsResponse(counts=counts)
+
+
+@router.post("/{room_id}/ack", status_code=status.HTTP_204_NO_CONTENT)
+async def ack(room_id: UUID, user: User = Depends(get_current_user)):
+    await ack_unread(user.id, room_id)

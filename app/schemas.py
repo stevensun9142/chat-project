@@ -66,3 +66,9 @@ class MessageResponse(BaseModel):
     sender_id: UUID
     content: str
     created_at: datetime
+
+
+# --- Unread ---
+
+class UnreadCountsResponse(BaseModel):
+    counts: dict[str, int]

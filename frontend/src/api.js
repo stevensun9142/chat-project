@@ -50,3 +50,10 @@ export const leaveRoom = (roomId, token) =>
 // Messages
 export const getMessages = (roomId, token, limit = 50) =>
   request(`/rooms/${roomId}/messages?limit=${limit}`, { token });
+
+// Unread counts
+export const getUnreadCounts = (token) =>
+  request("/rooms/unread", { token });
+
+export const ackUnread = (roomId, token) =>
+  request(`/rooms/${roomId}/ack`, { method: "POST", token });

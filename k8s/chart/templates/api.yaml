@@ -29,6 +29,7 @@ spec:
     spec:
 {{ include "chat.imagePullSecrets" . }}
       containers:
+        - name: api
           image: {{ .Values.api.image }}
           imagePullPolicy: {{ .Values.imagePullPolicy | default "Never" }}
           ports:
@@ -58,7 +59,7 @@ spec:
                   name: jwt-secret
                   key: jwt-secret
             - name: CORS_ORIGINS
-              value: {{ .Values.api.corsOrigins | default "*" | quote }}
+              value: {{ .Values.api.corsOrigins | default "[\"*\"]" | quote }}
           readinessProbe:
             httpGet:
               path: /docs

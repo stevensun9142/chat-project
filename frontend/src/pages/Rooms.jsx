@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "../auth";
 import { useWebSocket } from "../useWebSocket";
-import { listRooms, createRoom, getMessages, getMembers, leaveRoom, addMembers } from "../api";
+import { listRooms, createRoom, getMessages, getMembers, leaveRoom, addMembers, getUnreadCounts, ackUnread } from "../api";
 
 export default function Rooms() {
   const { accessToken, user, logout } = useAuth();
@@ -14,6 +14,7 @@ export default function Rooms() {
   const [addMemberId, setAddMemberId] = useState("");
   const [error, setError] = useState("");
   const [msgInput, setMsgInput] = useState("");
+  const [unreadCounts, setUnreadCounts] = useState({});
   const messagesEndRef = useRef(null);
   const selectedRoomRef = useRef(selectedRoom);
 
@@ -22,8 +23,14 @@ export default function Rooms() {
   const handleWsMessage = useCallback((msg) => {
     if (msg.type === "new_message" && msg.room_id === selectedRoomRef.current) {
       setMessages(prev => [...prev, msg]);
+      ackUnread(msg.room_id, accessToken).catch(() => {});
+    } else if (msg.type === "new_message") {
+      setUnreadCounts(prev => ({
+        ...prev,
+        [msg.room_id]: (prev[msg.room_id] || 0) + 1,
+      }));
     }
-  }, []);
+  }, [accessToken]);
 
   const { status: wsStatus, sendMessage } = useWebSocket(accessToken, handleWsMessage);
 
@@ -33,6 +40,15 @@ export default function Rooms() {
       setRooms(data);
     } catch {
       setError("Failed to load rooms");
+    }
+  }
+
+  async function loadUnreadCounts() {
+    try {
+      const data = await getUnreadCounts(accessToken);
+      setUnreadCounts(data.counts || {});
+    } catch {
+      // best-effort
     }
   }
 
@@ -56,12 +72,19 @@ export default function Rooms() {
 
   useEffect(() => {
     loadRooms();
+    loadUnreadCounts();
   }, []);
 
   useEffect(() => {
     if (selectedRoom) {
       loadMessages(selectedRoom);
       loadMembers(selectedRoom);
+      setUnreadCounts(prev => {
+        const next = { ...prev };
+        delete next[selectedRoom];
+        return next;
+      });
+      ackUnread(selectedRoom, accessToken).catch(() => {});
     }
   }, [selectedRoom]);
 
@@ -132,6 +155,9 @@ export default function Rooms() {
               className={`room-item${selectedRoom === r.id ? " selected" : ""}`}
             >
               <span className="room-name">{r.name}</span>
+              {unreadCounts[r.id] > 0 && (
+                <span className="unread-badge">{unreadCounts[r.id]}</span>
+              )}
               <button
                 className="btn-danger"
                 onClick={e => { e.stopPropagation(); handleLeaveRoom(r.id); }}

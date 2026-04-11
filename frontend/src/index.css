@@ -187,6 +187,21 @@ button:disabled {
   color: var(--text-muted);
 }
 
+.unread-badge {
+  background: var(--online, #23a55a);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 9px;
+  padding: 0 5px;
+  margin-left: auto;
+  margin-right: 4px;
+}
+
 /* User panel at bottom of sidebar */
 .user-panel {
   height: 52px;

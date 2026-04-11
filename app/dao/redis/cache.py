@@ -105,6 +105,35 @@ async def release_lock(room_id: UUID, token: str) -> None:
     await rdb.eval(_release_script, 1, LOCK_PREFIX + str(room_id), token)
 
 
+# --- Unread counts ---
+
+UNREAD_PREFIX = "unread:"
+
+
+async def get_unread_counts(user_id: UUID) -> dict[str, int]:
+    """Return {room_id: count} for all rooms with unread messages."""
+    rdb = await get_redis()
+    data = await rdb.hgetall(UNREAD_PREFIX + str(user_id))
+    return {room_id: int(count) for room_id, count in data.items() if int(count) > 0}
+
+
+async def ack_unread(user_id: UUID, room_id: UUID) -> None:
+    """Reset unread count for a room (user opened/viewed it)."""
+    rdb = await get_redis()
+    await rdb.hdel(UNREAD_PREFIX + str(user_id), str(room_id))
+
+
+# --- Room members cache ---
+
+MEMBERS_PREFIX = "members:"
+
+
+async def evict_room_members(room_id: UUID) -> None:
+    """Invalidate the cached member set for a room."""
+    rdb = await get_redis()
+    await rdb.delete(MEMBERS_PREFIX + str(room_id))
+
+
 async def get_messages_cached(
     room_id: UUID,
     limit: int,

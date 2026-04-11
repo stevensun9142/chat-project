@@ -34,7 +34,7 @@ api:
   port: 8000
   serviceType: NodePort
   nodePort: 30800
-  corsOrigins: "*"
+  corsOrigins: '["*"]'
 
 frontend:
   image: chat-frontend:latest
