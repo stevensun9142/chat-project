@@ -31,6 +31,12 @@ data:
         created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
+    CREATE TABLE read_positions (
+        user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        room_id     UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        last_read_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (user_id, room_id)
+    );
 
   02_init_test.sql: |
     CREATE DATABASE chat_db_test;
@@ -62,6 +68,12 @@ data:
         created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
+    CREATE TABLE read_positions (
+        user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        room_id     UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        last_read_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (user_id, room_id)
+    );
 ---
 apiVersion: v1
 kind: Service

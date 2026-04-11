@@ -49,7 +49,7 @@ func startGateway(t *testing.T) *httptest.Server {
 	t.Cleanup(func() { producer.Close() })
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/ws", ws.HandleUpgrade(hub, validator, producer, idgen))
+	mux.HandleFunc("/ws", ws.HandleUpgrade(hub, validator, producer, idgen, nil))
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 	return server

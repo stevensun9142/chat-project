@@ -368,6 +368,43 @@ button:disabled {
   word-wrap: break-word;
 }
 
+/* Failed / pending message states */
+.message-pending {
+  opacity: 0.5;
+}
+
+.message-failed .msg-content {
+  color: #f04747;
+  opacity: 0.6;
+}
+
+.msg-failed-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.msg-failed-icon {
+  color: #f04747;
+  font-size: 14px;
+  cursor: default;
+}
+
+.msg-retry-btn {
+  background: none;
+  border: none;
+  color: var(--text-link);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+}
+
+.msg-retry-btn:hover {
+  text-decoration: underline;
+  color: var(--accent);
+}
+
 /* Chat input */
 .chat-input-container {
   padding: 0 16px 24px;

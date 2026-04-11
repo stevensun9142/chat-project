@@ -9,6 +9,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stevensun/chat-project/gateway/id"
 	"github.com/stevensun/chat-project/gateway/kafka"
+	"github.com/stevensun/chat-project/gateway/ratelimit"
 )
 
 const (
@@ -26,6 +27,7 @@ type Client struct {
 	send     chan []byte
 	producer *kafka.Producer
 	idgen    *id.Generator
+	limiter  *ratelimit.Limiter
 	UserID   string
 	Username string
 }
@@ -35,13 +37,14 @@ func (c *Client) Send() chan []byte {
 	return c.send
 }
 
-func NewClient(hub *Hub, conn *websocket.Conn, producer *kafka.Producer, idgen *id.Generator, userID, username string) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, producer *kafka.Producer, idgen *id.Generator, limiter *ratelimit.Limiter, userID, username string) *Client {
 	return &Client{
 		hub:      hub,
 		conn:     conn,
 		send:     make(chan []byte, sendBufSize),
 		producer: producer,
 		idgen:    idgen,
+		limiter:  limiter,
 		UserID:   userID,
 		Username: username,
 	}
@@ -51,14 +54,16 @@ func NewClient(hub *Hub, conn *websocket.Conn, producer *kafka.Producer, idgen *
 // It runs in the handler goroutine (blocks until disconnect).
 func (c *Client) readPump() {
 	defer func() {
-		// only publish disconnect event if this client has cleanly ended all connections
-		// removed is false if the client is connected on more than one instance, causing previous instances
-		// to disconnect
 		if removed := c.hub.Unregister(c.UserID, c); removed {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			if err := c.producer.PublishPresence(ctx, c.UserID, c.Username, "disconnect"); err != nil {
 				log.Printf("presence disconnect error user=%s: %v", c.UserID, err)
+			}
+			if c.limiter != nil {
+				if err := c.limiter.Delete(ctx, c.UserID); err != nil {
+					log.Printf("rate limit cleanup error user=%s: %v", c.UserID, err)
+				}
 			}
 		}
 		c.conn.Close()
@@ -128,8 +133,20 @@ func (c *Client) writePump() {
 // handleSendMessage publishes the message to Kafka for persistence and delivery.
 func (c *Client) handleSendMessage(msg *ClientMessage) {
 	if msg.RoomID == "" || msg.Content == "" {
-		c.sendError("room_id and content are required")
+		c.sendError("room_id and content are required", msg.Nonce)
 		return
+	}
+
+	// Rate limit check — fail-open if Redis is unreachable.
+	if c.limiter != nil {
+		allowed, _, err := c.limiter.Allow(context.Background(), c.UserID)
+		if err != nil {
+			log.Printf("rate limit error user=%s: %v (allowing)", c.UserID, err)
+		} else if !allowed {
+			log.Printf("rate limited user=%s", c.UserID)
+			c.sendError("rate limited, try again shortly", msg.Nonce)
+			return
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -139,7 +156,7 @@ func (c *Client) handleSendMessage(msg *ClientMessage) {
 
 	if err := c.producer.Publish(ctx, msgID, msg.RoomID, c.UserID, c.Username, msg.Content); err != nil {
 		log.Printf("kafka publish error user=%s room=%s: %v", c.UserID, msg.RoomID, err)
-		c.sendError("failed to send message")
+		c.sendError("failed to send message", msg.Nonce)
 		return
 	}
 
@@ -147,10 +164,13 @@ func (c *Client) handleSendMessage(msg *ClientMessage) {
 }
 
 // sendError sends a JSON error message to the client.
-func (c *Client) sendError(message string) {
+func (c *Client) sendError(message string, nonce ...string) {
 	reply := ServerMessage{
 		Type:    "error",
 		Message: message,
+	}
+	if len(nonce) > 0 {
+		reply.Nonce = nonce[0]
 	}
 	data, err := json.Marshal(reply)
 	if err != nil {

@@ -34,3 +34,11 @@ CREATE TABLE refresh_tokens (
 );
 
 CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
+
+-- Read positions (last-read pointer for durable unread counts)
+CREATE TABLE read_positions (
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    room_id     UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    last_read_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, room_id)
+);

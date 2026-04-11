@@ -3,8 +3,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.auth.utils import get_current_user
-from app.dao.cassandra.messages_dao import get_messages
+from app.dao.cassandra.messages_dao import count_messages_since, get_messages
 from app.dao.redis.cache import ack_unread, evict_room_members, get_messages_cached, get_unread_counts
+from app.dao.postgres.read_positions_dao import get_read_positions, upsert_read_position
 from app.dao.postgres.rooms_dao import (
     add_members,
     create_room,
@@ -102,10 +103,31 @@ async def message_history(
 
 @router.get("/unread", response_model=UnreadCountsResponse)
 async def unread_counts(user: User = Depends(get_current_user)):
+    # Hot path: Redis has incremented counts
     counts = await get_unread_counts(user.id)
-    return UnreadCountsResponse(counts=counts)
+    if counts:
+        return UnreadCountsResponse(counts=counts)
+
+    # Cold path: cache miss — derive from read positions + Cassandra
+    rooms = await get_rooms_for_user(user.id)
+    if not rooms:
+        return UnreadCountsResponse(counts={})
+
+    positions = await get_read_positions(user.id)
+    cold_counts: dict[str, int] = {}
+    for room in rooms:
+        last_read = positions.get(room.id)
+        if last_read is None:
+            # Never acked — count since they joined
+            last_read = room.created_at
+        n = count_messages_since(room.id, last_read)
+        if n > 0:
+            cold_counts[str(room.id)] = n
+
+    return UnreadCountsResponse(counts=cold_counts)
 
 
 @router.post("/{room_id}/ack", status_code=status.HTTP_204_NO_CONTENT)
 async def ack(room_id: UUID, user: User = Depends(get_current_user)):
     await ack_unread(user.id, room_id)
+    await upsert_read_position(user.id, room_id)

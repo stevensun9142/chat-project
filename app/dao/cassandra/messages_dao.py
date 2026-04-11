@@ -76,3 +76,28 @@ def get_messages(
 
     results.reverse()  # Cassandra returns newest-first; UI needs oldest-first
     return results
+
+
+def count_messages_since(
+    room_id: uuid.UUID,
+    since: datetime,
+    max_buckets: int = 4,
+) -> int:
+    """Count messages in a room created after `since`, walking weekly buckets."""
+    session = get_session()
+    stmt = SimpleStatement(
+        "SELECT COUNT(*) FROM messages "
+        "WHERE room_id = %s AND bucket = %s AND created_at > %s",
+    )
+    total = 0
+    bucket = _week_bucket(datetime.now(timezone.utc))
+    since_bucket = _week_bucket(since)
+
+    for _ in range(max_buckets):
+        rows = session.execute(stmt, (room_id, bucket, since))
+        total += rows.one()[0]
+        if bucket == since_bucket:
+            break
+        bucket = _prev_week_bucket(bucket)
+
+    return total

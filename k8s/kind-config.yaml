@@ -37,3 +37,7 @@ nodes:
       - containerPort: 30380
         hostPort: 6380
         protocol: TCP
+      # Redis (ratelimit)
+      - containerPort: 30381
+        hostPort: 6381
+        protocol: TCP

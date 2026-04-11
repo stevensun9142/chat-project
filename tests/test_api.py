@@ -24,6 +24,7 @@ async def _setup_teardown():
     session = get_session()
     session.execute("TRUNCATE messages")
     await pool.execute("DELETE FROM refresh_tokens")
+    await pool.execute("DELETE FROM read_positions")
     await pool.execute("DELETE FROM room_members")
     await pool.execute("DELETE FROM rooms")
     await pool.execute("DELETE FROM users")

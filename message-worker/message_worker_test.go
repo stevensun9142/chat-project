@@ -18,11 +18,12 @@ import (
 var kafkaBrokers = []string{"localhost:9092", "localhost:9093", "localhost:9094"}
 
 const (
-	testPgDSN    = "postgres://chat:chat_secret@localhost:5432/chat_db_test?sslmode=disable"
-	testCassPort = "9042"
-	testCassKS   = "chat_test"
-	pollInterval = 200 * time.Millisecond
-	pollTimeout  = 10 * time.Second
+	testPgDSN     = "postgres://chat:chat_secret@localhost:5432/chat_db_test?sslmode=disable"
+	testCassPort  = "9042"
+	testCassKS    = "chat_test"
+	testRedisAddr = "localhost:6380"
+	pollInterval  = 200 * time.Millisecond
+	pollTimeout   = 10 * time.Second
 )
 
 // --- Postgres test helpers ---
@@ -162,9 +163,15 @@ func startWorker(t *testing.T, groupID string) context.CancelFunc {
 		cass.Close()
 		t.Fatalf("worker postgres: %v", err)
 	}
+	cache, err := store.NewRedis(testRedisAddr)
+	if err != nil {
+		pg.Close()
+		cass.Close()
+		t.Fatalf("worker redis: %v", err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	c := consumer.New(kafkaBrokers, groupID, cass, pg)
+	c := consumer.New(kafkaBrokers, groupID, cass, pg, cache)
 
 	go func() {
 		if err := c.Run(ctx); err != nil {
@@ -172,6 +179,7 @@ func startWorker(t *testing.T, groupID string) context.CancelFunc {
 		}
 		cass.Close()
 		pg.Close()
+		cache.Close()
 	}()
 
 	return cancel

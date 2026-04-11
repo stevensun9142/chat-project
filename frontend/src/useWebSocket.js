@@ -114,12 +114,13 @@ export function useWebSocket(token, onMessage) {
     };
   }, [token, connect, clearReconnect]);
 
-  const sendMessage = useCallback((roomId, content) => {
+  const sendMessage = useCallback((roomId, content, nonce) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: "send_message",
         room_id: roomId,
         content,
+        nonce,
       }));
     }
   }, []);

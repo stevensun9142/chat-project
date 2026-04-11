@@ -11,6 +11,7 @@ import (
 	delivery "github.com/stevensun/chat-project/gateway/grpc"
 	"github.com/stevensun/chat-project/gateway/id"
 	"github.com/stevensun/chat-project/gateway/kafka"
+	"github.com/stevensun/chat-project/gateway/ratelimit"
 	"github.com/stevensun/chat-project/gateway/ws"
 	"google.golang.org/grpc"
 
@@ -22,6 +23,7 @@ func main() {
 	jwtSecret := requireEnv("JWT_SECRET")
 	brokers := strings.Split(requireEnv("KAFKA_BROKERS"), ",")
 	grpcPort := requireEnv("GRPC_PORT")
+	redisRatelimitAddr := requireEnv("REDIS_RATELIMIT_ADDR")
 
 	gatewayID := os.Getenv("GATEWAY_ID")
 	if gatewayID == "" {
@@ -38,7 +40,13 @@ func main() {
 	defer producer.Close()
 	idgen := id.NewGenerator(gatewayID)
 
-	http.HandleFunc("/ws", ws.HandleUpgrade(hub, validator, producer, idgen))
+	limiter, err := ratelimit.NewLimiter(redisRatelimitAddr, 20, 2.0)
+	if err != nil {
+		log.Fatalf("rate limiter init: %v", err)
+	}
+	defer limiter.Close()
+
+	http.HandleFunc("/ws", ws.HandleUpgrade(hub, validator, producer, idgen, limiter))
 
 	// Start gRPC server for receiving routed messages from Router.
 	lis, err := net.Listen("tcp", ":"+grpcPort)

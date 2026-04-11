@@ -5,6 +5,7 @@ type ClientMessage struct {
 	Type    string `json:"type"` // "send_message"
 	RoomID  string `json:"room_id"`
 	Content string `json:"content"`
+	Nonce   string `json:"nonce,omitempty"`
 }
 
 // ServerMessage is sent from the gateway to the browser.
@@ -17,4 +18,5 @@ type ServerMessage struct {
 	Content    string `json:"content,omitempty"`
 	CreatedAt  string `json:"created_at,omitempty"`
 	Message    string `json:"message,omitempty"` // for error type
+	Nonce      string `json:"nonce,omitempty"`
 }

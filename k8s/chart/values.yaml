@@ -54,6 +54,10 @@ redisCache:
   image: redis:7.2
   nodePort: 30380
 
+redisRatelimit:
+  image: redis:7.2
+  nodePort: 30381
+
 jwt:
   secret: change-me-in-prod
 

@@ -22,15 +22,36 @@ export default function Rooms() {
 
   const handleWsMessage = useCallback((msg) => {
     if (msg.type === "new_message" && msg.room_id === selectedRoomRef.current) {
-      setMessages(prev => [...prev, msg]);
+      // If this is our own echo, replace the pending optimistic message
+      if (msg.sender_id === user?.id) {
+        setMessages(prev => {
+          const idx = prev.findIndex(
+            m => m._status === "pending" && m.content === msg.content
+          );
+          if (idx !== -1) {
+            const updated = [...prev];
+            updated[idx] = msg;
+            return updated;
+          }
+          return [...prev, msg];
+        });
+      } else {
+        setMessages(prev => [...prev, msg]);
+      }
       ackUnread(msg.room_id, accessToken).catch(() => {});
     } else if (msg.type === "new_message") {
       setUnreadCounts(prev => ({
         ...prev,
         [msg.room_id]: (prev[msg.room_id] || 0) + 1,
       }));
+    } else if (msg.type === "error" && msg.nonce) {
+      setMessages(prev => prev.map(m =>
+        m._nonce === msg.nonce && m._status === "pending"
+          ? { ...m, _status: "failed" }
+          : m
+      ));
     }
-  }, [accessToken]);
+  }, [accessToken, user]);
 
   const { status: wsStatus, sendMessage } = useWebSocket(accessToken, handleWsMessage);
 
@@ -136,6 +157,16 @@ export default function Rooms() {
   }
 
   const selectedRoomObj = rooms.find(r => r.id === selectedRoom);
+
+  function handleRetry(msg) {
+    const nonce = crypto.randomUUID();
+    setMessages(prev => prev.map(m =>
+      m._nonce === msg._nonce
+        ? { ...m, _status: "pending", _nonce: nonce, message_id: nonce }
+        : m
+    ));
+    sendMessage(msg.room_id, msg.content, nonce);
+  }
 
   const wsColor = wsStatus === "connected" ? "var(--online)" : wsStatus === "connecting" ? "var(--idle)" : "var(--offline)";
 
@@ -245,9 +276,19 @@ export default function Rooms() {
                   const displayName = sender?.username || m.sender_name || m.sender_id?.slice(0, 8);
                   const prevMsg = messages[i - 1];
                   const isGroupStart = !prevMsg || prevMsg.sender_id !== m.sender_id;
+                  const isFailed = m._status === "failed";
+                  const isPending = m._status === "pending";
+                  const statusClass = isFailed ? " message-failed" : isPending ? " message-pending" : "";
+
+                  const failedIndicator = isFailed && (
+                    <div className="msg-failed-row">
+                      <span className="msg-failed-icon" title="We were unable to deliver your message, try again later.">⚠</span>
+                      <button className="msg-retry-btn" onClick={() => handleRetry(m)}>Retry</button>
+                    </div>
+                  );
 
                   return isGroupStart ? (
-                    <div key={m.message_id} className="message message-group-start">
+                    <div key={m._nonce || m.message_id} className={`message message-group-start${statusClass}`}>
                       <div className="msg-avatar"><img src="/avatar.svg" alt="avatar" className="avatar-img" /></div>
                       <div className="msg-body">
                         <div className="msg-header">
@@ -255,12 +296,14 @@ export default function Rooms() {
                           <span className="msg-timestamp">{new Date(m.created_at).toLocaleString()}</span>
                         </div>
                         <div className="msg-content">{m.content}</div>
+                        {failedIndicator}
                       </div>
                     </div>
                   ) : (
-                    <div key={m.message_id} className="message" style={{ paddingLeft: 56 }}>
+                    <div key={m._nonce || m.message_id} className={`message${statusClass}`} style={{ paddingLeft: 56 }}>
                       <div className="msg-body">
                         <div className="msg-content">{m.content}</div>
+                        {failedIndicator}
                       </div>
                     </div>
                   );
@@ -275,7 +318,19 @@ export default function Rooms() {
                 onSubmit={e => {
                   e.preventDefault();
                   if (!msgInput.trim()) return;
-                  sendMessage(selectedRoom, msgInput.trim());
+                  const content = msgInput.trim();
+                  const nonce = crypto.randomUUID();
+                  setMessages(prev => [...prev, {
+                    _nonce: nonce,
+                    _status: "pending",
+                    message_id: nonce,
+                    room_id: selectedRoom,
+                    sender_id: user.id,
+                    sender_name: user.username,
+                    content,
+                    created_at: new Date().toISOString(),
+                  }]);
+                  sendMessage(selectedRoom, content, nonce);
                   setMsgInput("");
                 }}
                 className="chat-input-wrapper"
