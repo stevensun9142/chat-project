@@ -183,12 +183,6 @@ button:disabled {
   align-items: center;
   gap: 6px;
 }
-.room-item .room-name::before {
-  content: "#";
-  font-size: 18px;
-  font-weight: 400;
-  color: var(--text-muted);
-}
 
 .unread-badge {
   background: var(--online, #23a55a);
@@ -282,11 +276,6 @@ button:disabled {
   border-bottom: 1px solid var(--bg-tertiary);
   font-weight: 600;
   flex-shrink: 0;
-}
-.chat-header .channel-hash {
-  color: var(--text-muted);
-  font-size: 22px;
-  font-weight: 400;
 }
 .chat-header .divider {
   width: 1px;
@@ -471,6 +460,22 @@ button:disabled {
 .btn-create-room:hover {
   color: var(--text-primary);
   background: transparent;
+}
+
+.btn-create-room-full {
+  margin: 4px 8px 8px;
+  padding: 6px 12px;
+  background: var(--accent);
+  color: var(--text-primary);
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  width: calc(100% - 16px);
+}
+.btn-create-room-full:hover {
+  background: var(--accent-hover);
 }
 
 /* --- Sidebar tabs --- */

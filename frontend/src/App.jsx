@@ -22,6 +22,7 @@ export default function App() {
           <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
           <Route path="/register" element={<GuestRoute><Register /></GuestRoute>} />
           <Route path="/" element={<ProtectedRoute><Rooms /></ProtectedRoute>} />
+          <Route path="/rooms/:roomId" element={<ProtectedRoute><Rooms /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

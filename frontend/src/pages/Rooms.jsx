@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import { useWebSocket } from "../useWebSocket";
 import {
@@ -9,8 +10,10 @@ import {
 
 export default function Rooms() {
   const { accessToken, user, logout } = useAuth();
+  const { roomId: urlRoomId } = useParams();
+  const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
-  const [selectedRoom, setSelectedRoom] = useState(null);
+  const selectedRoom = urlRoomId || null;
   const [messages, setMessages] = useState([]);
   const [members, setMembers] = useState([]);
   const [addMemberId, setAddMemberId] = useState("");
@@ -152,7 +155,7 @@ export default function Rooms() {
     try {
       await leaveRoom(roomId, accessToken);
       if (selectedRoom === roomId) {
-        setSelectedRoom(null);
+        navigate("/");
         setMessages([]);
         setMembers([]);
       }
@@ -283,15 +286,16 @@ export default function Rooms() {
         {sidebarTab === "rooms" ? (
           <>
             <div className="sidebar-section-title">
-              Text Channels
+              Rooms
               <button className="btn-create-room" onClick={() => setShowCreateModal(true)} title="Create Room">+</button>
             </div>
+            <button className="btn-create-room-full" onClick={() => setShowCreateModal(true)}>Create Room</button>
 
             <div className="room-list">
               {rooms.map(r => (
                 <div
                   key={r.id}
-                  onClick={() => setSelectedRoom(r.id)}
+                  onClick={() => navigate(`/rooms/${r.id}`)}
                   className={`room-item${selectedRoom === r.id ? " selected" : ""}`}
                 >
                   <span className="room-name">{r.name}</span>
@@ -385,7 +389,6 @@ export default function Rooms() {
           <>
             {/* Chat header */}
             <div className="chat-header">
-              <span className="channel-hash">#</span>
               <span>{selectedRoomObj.name}</span>
               <span className="divider" />
               <span className="members-info">{members.length} member{members.length !== 1 ? "s" : ""}</span>
@@ -409,9 +412,9 @@ export default function Rooms() {
               {messages.length === 0 ? (
                 <div className="empty-state">
                   <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 40, marginBottom: 8 }}>#</div>
-                    <div style={{ fontWeight: 600, fontSize: 18, color: "var(--text-primary)", marginBottom: 4 }}>Welcome to #{selectedRoomObj.name}</div>
-                    <div>This is the start of the #{selectedRoomObj.name} channel.</div>
+                    <div style={{ fontSize: 40, marginBottom: 8 }}>💬</div>
+                    <div style={{ fontWeight: 600, fontSize: 18, color: "var(--text-primary)", marginBottom: 4 }}>Welcome to {selectedRoomObj.name}</div>
+                    <div>This is the start of the conversation.</div>
                   </div>
                 </div>
               ) : (
@@ -482,7 +485,7 @@ export default function Rooms() {
                 <input
                   value={msgInput}
                   onChange={e => setMsgInput(e.target.value)}
-                  placeholder={wsStatus === "connected" ? `Message #${selectedRoomObj.name}` : "Connecting..."}
+                  placeholder={wsStatus === "connected" ? `Message ${selectedRoomObj.name}` : "Connecting..."}
                   disabled={wsStatus !== "connected"}
                 />
                 <button type="submit" disabled={wsStatus !== "connected"}>➤</button>
@@ -493,7 +496,7 @@ export default function Rooms() {
           <div className="empty-state">
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 48, marginBottom: 16 }}>💬</div>
-              <div style={{ fontWeight: 600, fontSize: 20, color: "var(--text-primary)", marginBottom: 8 }}>Select a channel</div>
+              <div style={{ fontWeight: 600, fontSize: 20, color: "var(--text-primary)", marginBottom: 8 }}>Select a room</div>
               <div>Pick a room from the sidebar to start chatting.</div>
             </div>
           </div>

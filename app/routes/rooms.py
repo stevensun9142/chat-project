@@ -55,6 +55,32 @@ async def list_rooms(user: User = Depends(get_current_user)):
     return [RoomResponse(id=r.id, name=r.name, created_by=r.created_by, created_at=r.created_at) for r in rooms]
 
 
+@router.get("/unread", response_model=UnreadCountsResponse)
+async def unread_counts(user: User = Depends(get_current_user)):
+    # Hot path: Redis has incremented counts
+    counts = await get_unread_counts(user.id)
+    if counts:
+        return UnreadCountsResponse(counts=counts)
+
+    # Cold path: cache miss — derive from read positions + Cassandra
+    rooms = await get_rooms_for_user(user.id)
+    if not rooms:
+        return UnreadCountsResponse(counts={})
+
+    positions = await get_read_positions(user.id)
+    cold_counts: dict[str, int] = {}
+    for room in rooms:
+        last_read = positions.get(room.id)
+        if last_read is None:
+            # Never acked — count since they joined
+            last_read = room.created_at
+        n = count_messages_since(room.id, last_read)
+        if n > 0:
+            cold_counts[str(room.id)] = n
+
+    return UnreadCountsResponse(counts=cold_counts)
+
+
 @router.get("/{room_id}", response_model=RoomResponse)
 async def get_room_detail(room_id: UUID, user: User = Depends(get_current_user)):
     await _verify_membership(room_id, user.id)
@@ -113,32 +139,6 @@ async def message_history(
         )
         for m in messages
     ]
-
-
-@router.get("/unread", response_model=UnreadCountsResponse)
-async def unread_counts(user: User = Depends(get_current_user)):
-    # Hot path: Redis has incremented counts
-    counts = await get_unread_counts(user.id)
-    if counts:
-        return UnreadCountsResponse(counts=counts)
-
-    # Cold path: cache miss — derive from read positions + Cassandra
-    rooms = await get_rooms_for_user(user.id)
-    if not rooms:
-        return UnreadCountsResponse(counts={})
-
-    positions = await get_read_positions(user.id)
-    cold_counts: dict[str, int] = {}
-    for room in rooms:
-        last_read = positions.get(room.id)
-        if last_read is None:
-            # Never acked — count since they joined
-            last_read = room.created_at
-        n = count_messages_since(room.id, last_read)
-        if n > 0:
-            cold_counts[str(room.id)] = n
-
-    return UnreadCountsResponse(counts=cold_counts)
 
 
 @router.post("/{room_id}/ack", status_code=status.HTTP_204_NO_CONTENT)

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { jwtDecode } from "./jwtDecode";
+import { setAuthCallbacks } from "./api";
 
 const AuthContext = createContext(null);
 
@@ -26,6 +27,14 @@ export function AuthProvider({ children }) {
     setRefreshToken(null);
     setUser(null);
   }
+
+  useEffect(() => {
+    setAuthCallbacks({
+      getRefreshToken: () => localStorage.getItem("refresh_token"),
+      saveTokens,
+      onLogout: logout,
+    });
+  }, []);
 
   return (
     <AuthContext.Provider value={{ accessToken, refreshToken, user, saveTokens, logout }}>

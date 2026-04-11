@@ -1,5 +1,30 @@
 const API = import.meta.env.VITE_API_URL || "http://localhost:8003";
 
+let _getRefreshToken = null;
+let _saveTokens = null;
+let _onLogout = null;
+let _refreshing = null;
+
+export function setAuthCallbacks({ getRefreshToken, saveTokens, onLogout }) {
+  _getRefreshToken = getRefreshToken;
+  _saveTokens = saveTokens;
+  _onLogout = onLogout;
+}
+
+async function refreshAccessToken() {
+  const rt = _getRefreshToken?.();
+  if (!rt) throw { status: 401, detail: "No refresh token" };
+  const res = await fetch(`${API}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: rt }),
+  });
+  if (!res.ok) throw { status: res.status, detail: "Refresh failed" };
+  const data = await res.json();
+  _saveTokens?.(data.access_token, data.refresh_token);
+  return data.access_token;
+}
+
 async function request(path, { method = "GET", body, token } = {}) {
   const headers = {};
   if (body) headers["Content-Type"] = "application/json";
@@ -12,6 +37,30 @@ async function request(path, { method = "GET", body, token } = {}) {
   });
 
   if (res.status === 204) return null;
+
+  if (res.status === 401 && token && _getRefreshToken) {
+    try {
+      if (!_refreshing) _refreshing = refreshAccessToken();
+      const newToken = await _refreshing;
+      _refreshing = null;
+      const retry = await fetch(`${API}${path}`, {
+        method,
+        headers: {
+          ...headers,
+          Authorization: `Bearer ${newToken}`,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      if (retry.status === 204) return null;
+      const retryData = await retry.json();
+      if (!retry.ok) throw { status: retry.status, detail: retryData.detail || "Request failed" };
+      return retryData;
+    } catch {
+      _refreshing = null;
+      _onLogout?.();
+      throw { status: 401, detail: "Session expired" };
+    }
+  }
 
   const data = await res.json();
   if (!res.ok) throw { status: res.status, detail: data.detail || "Request failed" };
