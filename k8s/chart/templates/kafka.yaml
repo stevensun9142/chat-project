@@ -81,6 +81,10 @@ spec:
               value: {{ $.Values.kafka.clusterId }}
             - name: KAFKA_HEAP_OPTS
               value: {{ $.Values.kafka.heapOpts | quote }}
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: {{ min $.Values.kafka.replicas 3 | quote }}
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: {{ min $.Values.kafka.replicas 3 | quote }}
           volumeMounts:
             - name: data
               mountPath: /tmp/kraft-combined-logs

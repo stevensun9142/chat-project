@@ -1,27 +1,26 @@
 # values-cloud.yaml — Oracle Cloud Free Tier (ARM64 k3s) overlay
 # Usage: helm install chat k8s/chart/ -n chat --create-namespace -f k8s/values-cloud.yaml
 #
-# Replace <REGION> with your OCI region key (e.g., us-ashburn-1)
-# Replace <TENANCY> with your OCIR tenancy namespace
+# Region: us-ashburn-1 (iad), Tenancy: idgcyiznbhvc
 
 imagePullPolicy: IfNotPresent
 imagePullSecret: ocir-secret
 
 # --- Container images (OCIR) ---
 gateway:
-  image: <REGION>.ocir.io/<TENANCY>/chat-gateway:latest
+  image: iad.ocir.io/idgcyiznbhvc/chat-gateway:latest
   replicas: 1
 
 messageWorker:
-  image: <REGION>.ocir.io/<TENANCY>/chat-message-worker:latest
+  image: iad.ocir.io/idgcyiznbhvc/chat-message-worker:latest
   replicas: 1
 
 router:
-  image: <REGION>.ocir.io/<TENANCY>/chat-router:latest
+  image: iad.ocir.io/idgcyiznbhvc/chat-router:latest
   replicas: 1
 
 api:
-  image: <REGION>.ocir.io/<TENANCY>/chat-api:latest
+  image: iad.ocir.io/idgcyiznbhvc/chat-api:latest
   replicas: 1
   port: 8000
   serviceType: ClusterIP
@@ -29,20 +28,18 @@ api:
   corsOrigins: '["*"]'
 
 frontend:
-  image: <REGION>.ocir.io/<TENANCY>/chat-frontend:latest
+  image: iad.ocir.io/idgcyiznbhvc/chat-frontend:latest
   replicas: 1
 
 # --- Ingress (nginx, least-connections for WebSocket) ---
 ingress:
   enabled: true
   ingressClassName: nginx
+  host: bandit-chat.duckdns.org
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
-    nginx.ingress.kubernetes.io/load-balance: "least_conn"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
-    nginx.ingress.kubernetes.io/upstream-hash-by: ""
 
 # --- Secrets (override in deployment, NOT in git) ---
 jwt:
@@ -52,6 +49,7 @@ jwt:
 kafka:
   image: apache/kafka:3.7.1
   replicas: 1
+  clusterId: MkU3OEVBNTcwNTJENDM2Qk
   heapOpts: "-Xmx256m -Xms256m"
   storage: 2Gi
   nodePorts:
@@ -70,12 +68,28 @@ kafka:
 # --- Smaller storage for free tier ---
 postgres:
   image: postgres:16
+  password: chat_secret
+  user: chat
+  database: chat_db
   storage: 5Gi
+  nodePort: 30432
 
 cassandra:
   image: cassandra:4.1
+  clusterName: chat_cluster
+  dc: dc1
   storage: 5Gi
+  nodePort: 30042
 
 redis:
   image: redis:7.2
   storage: 256Mi
+  nodePort: 30379
+
+redisCache:
+  image: redis:7.2
+  nodePort: 30380
+
+redisRatelimit:
+  image: redis:7.2
+  nodePort: 30381

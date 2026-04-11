@@ -2,7 +2,7 @@ SHELL := /bin/bash
 HELM_CMD = sudo helm --kube-context kind-chat
 KUBECTL_CMD = sudo kubectl --context kind-chat -n chat
 
-.PHONY: deploy upgrade status pods logs-gateway cassandra-schema api gateway frontend test message-worker test-gateway test-message-worker router test-router test-e2e build-gateway build-message-worker build-router build-api build-frontend build-all cloud-build-gateway cloud-build-message-worker cloud-build-router cloud-build-api cloud-build-frontend cloud-build-all cloud-deploy cloud-upgrade
+.PHONY: deploy upgrade status pods logs-gateway cassandra-schema api gateway frontend test message-worker test-gateway test-message-worker router test-router test-e2e build-gateway build-message-worker build-router build-api build-frontend build-all cloud-build-gateway cloud-build-message-worker cloud-build-router cloud-build-api cloud-build-frontend cloud-build-all cloud-deploy cloud-upgrade deploy-remote
 
 # First-time install (build images, load into Kind, deploy via Helm)
 deploy: build-all
@@ -89,9 +89,9 @@ build-frontend:
 
 # --- Cloud (Oracle ARM64 + OCIR) ---
 # Set these before running cloud targets:
-#   export OCIR_REGION=us-ashburn-1
+#   export OCIR_REGION_KEY=iad          (region key, not full name)
 #   export OCIR_TENANCY=your-tenancy-namespace
-OCIR_PREFIX = $(OCIR_REGION).ocir.io/$(OCIR_TENANCY)
+OCIR_PREFIX = $(OCIR_REGION_KEY).ocir.io/$(OCIR_TENANCY)
 
 cloud-build-gateway:
 	docker buildx build --platform linux/arm64 -f gateway/Dockerfile . -t $(OCIR_PREFIX)/chat-gateway:latest --push
@@ -108,7 +108,7 @@ cloud-build-api:
 cloud-build-frontend:
 	docker buildx build --platform linux/arm64 -f frontend/Dockerfile . \
 		--build-arg VITE_API_URL=/api \
-		--build-arg VITE_WS_URL=ws://$(CLOUD_IP)/ws \
+		--build-arg VITE_WS_URL=wss://$(CLOUD_HOST)/ws \
 		-t $(OCIR_PREFIX)/chat-frontend:latest --push
 
 cloud-build-all: cloud-build-gateway cloud-build-message-worker cloud-build-router cloud-build-api cloud-build-frontend
@@ -118,3 +118,14 @@ cloud-deploy:
 
 cloud-upgrade:
 	helm upgrade chat k8s/chart/ -n chat -f k8s/values-cloud.yaml
+
+# Deploy to remote VM (Oracle Cloud k3s)
+# Usage: make deploy-remote CLOUD_VM=opc@143.47.126.185
+CLOUD_VM ?= opc@143.47.126.185
+CLOUD_IMAGES = chat-gateway chat-message-worker chat-router chat-api chat-frontend
+
+deploy-remote: cloud-build-all
+	scp -r k8s/chart k8s/values-cloud.yaml $(CLOUD_VM):~/
+	ssh $(CLOUD_VM) 'for img in $(CLOUD_IMAGES); do sudo crictl rmi $(OCIR_PREFIX)/$$img:latest 2>/dev/null; done'
+	ssh $(CLOUD_VM) 'sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade chat ~/chart/ -n chat -f ~/values-cloud.yaml'
+	ssh $(CLOUD_VM) 'sudo kubectl -n chat rollout restart deployment api frontend && sudo kubectl -n chat rollout restart statefulset gateway && sudo kubectl -n chat delete pod -l app=message-worker -l app=router 2>/dev/null; sudo kubectl -n chat delete pod -l app=message-worker && sudo kubectl -n chat delete pod -l app=router'
