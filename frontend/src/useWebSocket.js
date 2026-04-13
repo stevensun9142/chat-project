@@ -6,20 +6,22 @@ const INITIAL_DELAY = 1000;
 const MAX_DELAY = 30000;
 
 // Close codes that should not trigger reconnection
-const NO_RECONNECT_CODES = [1000, 1008]; // normal close, policy violation (bad token)
+const NO_RECONNECT_CODES = [1000]; // normal close only
 
-export function useWebSocket(token, onMessage) {
+export function useWebSocket(token, onMessage, onTokenExpired) {
   const [status, setStatus] = useState("disconnected"); // "connecting" | "connected" | "disconnected"
   const wsRef = useRef(null);
   const reconnectTimer = useRef(null);
   const attemptRef = useRef(0);
   const tokenRef = useRef(token);
   const onMessageRef = useRef(onMessage);
+  const onTokenExpiredRef = useRef(onTokenExpired);
   const connectRef = useRef(null);
 
   // Keep refs current without re-triggering the effect
   useEffect(() => { tokenRef.current = token; }, [token]);
   useEffect(() => { onMessageRef.current = onMessage; }, [onMessage]);
+  useEffect(() => { onTokenExpiredRef.current = onTokenExpired; }, [onTokenExpired]);
 
   const clearReconnect = useCallback(() => {
     if (reconnectTimer.current) {
@@ -79,6 +81,12 @@ export function useWebSocket(token, onMessage) {
       if (NO_RECONNECT_CODES.includes(event.code)) return;
       if (!tokenRef.current) return;
 
+      // Token rejected — ask caller to refresh, then reconnect with new token
+      if (event.code === 1008) {
+        onTokenExpiredRef.current?.();
+        return;
+      }
+
       scheduleReconnect();
     };
 
@@ -122,7 +130,9 @@ export function useWebSocket(token, onMessage) {
         content,
         nonce,
       }));
+      return true;
     }
+    return false;
   }, []);
 
   return { status, sendMessage };

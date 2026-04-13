@@ -12,6 +12,7 @@ import (
 	"github.com/stevensun/chat-project/gateway/auth"
 	"github.com/stevensun/chat-project/gateway/id"
 	"github.com/stevensun/chat-project/gateway/kafka"
+	"github.com/stevensun/chat-project/gateway/presence"
 	"github.com/stevensun/chat-project/gateway/ratelimit"
 )
 
@@ -26,7 +27,7 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func HandleUpgrade(hub *Hub, validator *auth.JWTValidator, producer *kafka.Producer, idgen *id.Generator, limiter *ratelimit.Limiter) http.HandlerFunc {
+func HandleUpgrade(hub *Hub, validator *auth.JWTValidator, producer *kafka.Producer, idgen *id.Generator, limiter *ratelimit.Limiter, refresher *presence.Refresher) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := r.URL.Query().Get("token")
 		if token == "" {
@@ -54,7 +55,7 @@ func HandleUpgrade(hub *Hub, validator *auth.JWTValidator, producer *kafka.Produ
 			return
 		}
 
-		client := NewClient(hub, conn, producer, idgen, limiter, claims.UserID, claims.Username)
+		client := NewClient(hub, conn, producer, idgen, limiter, refresher, claims.UserID, claims.Username)
 		hub.Register(client)
 
 		log.Printf("user %s (%s) connected", claims.Username, claims.UserID)

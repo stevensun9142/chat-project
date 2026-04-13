@@ -30,7 +30,7 @@ api:
 
 # Run the Go gateway locally
 gateway:
-	cd gateway && JWT_SECRET=change-me-in-prod KAFKA_BROKERS=localhost:9092,localhost:9093,localhost:9094 GATEWAY_PORT=8002 GRPC_PORT=9002 GATEWAY_ID=gateway-0 REDIS_RATELIMIT_ADDR=localhost:6381 go run main.go
+	cd gateway && JWT_SECRET=change-me-in-prod KAFKA_BROKERS=localhost:9092,localhost:9093,localhost:9094 GATEWAY_PORT=8002 GRPC_PORT=9002 GATEWAY_ID=gateway-0 REDIS_RATELIMIT_ADDR=localhost:6381 REDIS_PRESENCE_ADDR=localhost:6379 go run main.go
 
 # Run the frontend dev server
 frontend:

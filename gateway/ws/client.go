@@ -9,6 +9,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stevensun/chat-project/gateway/id"
 	"github.com/stevensun/chat-project/gateway/kafka"
+	"github.com/stevensun/chat-project/gateway/presence"
 	"github.com/stevensun/chat-project/gateway/ratelimit"
 )
 
@@ -22,14 +23,15 @@ const (
 
 // Client represents a single WebSocket connection with its identity and send channel.
 type Client struct {
-	hub      *Hub
-	conn     *websocket.Conn
-	send     chan []byte
-	producer *kafka.Producer
-	idgen    *id.Generator
-	limiter  *ratelimit.Limiter
-	UserID   string
-	Username string
+	hub       *Hub
+	conn      *websocket.Conn
+	send      chan []byte
+	producer  *kafka.Producer
+	idgen     *id.Generator
+	limiter   *ratelimit.Limiter
+	refresher *presence.Refresher
+	UserID    string
+	Username  string
 }
 
 // Send returns the client's outbound message channel.
@@ -37,16 +39,17 @@ func (c *Client) Send() chan []byte {
 	return c.send
 }
 
-func NewClient(hub *Hub, conn *websocket.Conn, producer *kafka.Producer, idgen *id.Generator, limiter *ratelimit.Limiter, userID, username string) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, producer *kafka.Producer, idgen *id.Generator, limiter *ratelimit.Limiter, refresher *presence.Refresher, userID, username string) *Client {
 	return &Client{
-		hub:      hub,
-		conn:     conn,
-		send:     make(chan []byte, sendBufSize),
-		producer: producer,
-		idgen:    idgen,
-		limiter:  limiter,
-		UserID:   userID,
-		Username: username,
+		hub:       hub,
+		conn:      conn,
+		send:      make(chan []byte, sendBufSize),
+		producer:  producer,
+		idgen:     idgen,
+		limiter:   limiter,
+		refresher: refresher,
+		UserID:    userID,
+		Username:  username,
 	}
 }
 
@@ -73,6 +76,9 @@ func (c *Client) readPump() {
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		if c.refresher != nil {
+			c.refresher.Refresh(c.UserID)
+		}
 		return nil
 	})
 

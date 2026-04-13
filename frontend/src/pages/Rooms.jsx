@@ -6,10 +6,11 @@ import {
   listRooms, createRoom, getMessages, getMembers, leaveRoom, addMembers,
   getUnreadCounts, ackUnread,
   listFriends, listFriendRequests, searchUsers, sendFriendRequest, acceptFriendRequest, removeFriend,
+  refresh,
 } from "../api";
 
 export default function Rooms() {
-  const { accessToken, user, logout } = useAuth();
+  const { accessToken, user, logout, saveTokens } = useAuth();
   const { roomId: urlRoomId } = useParams();
   const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
@@ -42,29 +43,38 @@ export default function Rooms() {
   useEffect(() => { selectedRoomRef.current = selectedRoom; }, [selectedRoom]);
 
   const handleWsMessage = useCallback((msg) => {
-    if (msg.type === "new_message" && msg.room_id === selectedRoomRef.current) {
-      // If this is our own echo, replace the pending optimistic message
+    if (msg.type === "new_message") {
+      // If this is our own echo, replace the oldest pending optimistic message
+      // for this room (FIFO). Works regardless of which room is selected.
       if (msg.sender_id === user?.id) {
         setMessages(prev => {
           const idx = prev.findIndex(
-            m => m._status === "pending" && m.content === msg.content
+            m => m._status === "pending" && m.room_id === msg.room_id
           );
           if (idx !== -1) {
             const updated = [...prev];
             updated[idx] = msg;
             return updated;
           }
-          return [...prev, msg];
+          // No pending match — append only if viewing this room
+          if (msg.room_id === selectedRoomRef.current) {
+            return [...prev, msg];
+          }
+          return prev;
         });
-      } else {
+      } else if (msg.room_id === selectedRoomRef.current) {
         setMessages(prev => [...prev, msg]);
       }
-      ackUnread(msg.room_id, accessToken).catch(() => {});
-    } else if (msg.type === "new_message") {
-      setUnreadCounts(prev => ({
-        ...prev,
-        [msg.room_id]: (prev[msg.room_id] || 0) + 1,
-      }));
+
+      // Update unread counts for messages in other rooms
+      if (msg.room_id === selectedRoomRef.current) {
+        ackUnread(msg.room_id, accessToken).catch(() => {});
+      } else {
+        setUnreadCounts(prev => ({
+          ...prev,
+          [msg.room_id]: (prev[msg.room_id] || 0) + 1,
+        }));
+      }
     } else if (msg.type === "error" && msg.nonce) {
       setMessages(prev => prev.map(m =>
         m._nonce === msg.nonce && m._status === "pending"
@@ -74,7 +84,35 @@ export default function Rooms() {
     }
   }, [accessToken, user]);
 
-  const { status: wsStatus, sendMessage } = useWebSocket(accessToken, handleWsMessage);
+  const handleTokenExpired = useCallback(async () => {
+    const rt = localStorage.getItem("refresh_token");
+    if (!rt) { logout(); return; }
+    try {
+      const data = await refresh(rt);
+      saveTokens(data.access_token, data.refresh_token);
+    } catch {
+      logout();
+    }
+  }, [saveTokens, logout]);
+
+  const { status: wsStatus, sendMessage } = useWebSocket(accessToken, handleWsMessage, handleTokenExpired);
+
+  // Auto-fail pending messages after 10 seconds with no echo
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const cutoff = Date.now() - 10_000;
+      setMessages(prev => {
+        const hasStale = prev.some(m => m._status === "pending" && new Date(m.created_at).getTime() < cutoff);
+        if (!hasStale) return prev;
+        return prev.map(m =>
+          m._status === "pending" && new Date(m.created_at).getTime() < cutoff
+            ? { ...m, _status: "failed" }
+            : m
+        );
+      });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   async function loadRooms() {
     try {
@@ -477,7 +515,12 @@ export default function Rooms() {
                     content,
                     created_at: new Date().toISOString(),
                   }]);
-                  sendMessage(selectedRoom, content, nonce);
+                  const sent = sendMessage(selectedRoom, content, nonce);
+                  if (!sent) {
+                    setMessages(prev => prev.map(m =>
+                      m._nonce === nonce ? { ...m, _status: "failed" } : m
+                    ));
+                  }
                   setMsgInput("");
                 }}
                 className="chat-input-wrapper"

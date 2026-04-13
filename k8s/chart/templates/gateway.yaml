@@ -48,6 +48,8 @@ spec:
               value: {{ include "chat.kafkaBrokers" $ | quote }}
             - name: REDIS_RATELIMIT_ADDR
               value: "redis-ratelimit:6379"
+            - name: REDIS_PRESENCE_ADDR
+              value: "redis:6379"
           readinessProbe:
             tcpSocket:
               port: {{ .Values.gateway.port }}
