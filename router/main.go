@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -17,17 +18,31 @@ import (
 
 func main() {
 	brokers := strings.Split(requireEnv("KAFKA_BROKERS"), ",")
-	redisAddr := requireEnv("REDIS_ADDR")
+	redisAddrs := strings.Split(requireEnv("REDIS_ADDRS"), ",")
 	pgDSN := requireEnv("PG_DSN")
 	gatewayAddrs := parseGatewayAddrs(requireEnv("GATEWAY_ADDRS"))
 
-	// Redis for presence registry.
-	rdb := redis.NewClient(&redis.Options{Addr: redisAddr})
-	defer rdb.Close()
+	// Redis for presence registry — cluster or single-node based on address count.
+	var rdb redis.Cmdable
+	var rdbCloser io.Closer
+	if len(redisAddrs) > 1 {
+		c := redis.NewClusterClient(&redis.ClusterOptions{
+			Addrs:         redisAddrs,
+			ReadOnly:      true,
+			RouteRandomly: true,
+		})
+		rdb = c
+		rdbCloser = c
+	} else {
+		c := redis.NewClient(&redis.Options{Addr: redisAddrs[0]})
+		rdb = c
+		rdbCloser = c
+	}
+	defer rdbCloser.Close()
 	if err := rdb.Ping(context.Background()).Err(); err != nil {
 		log.Fatalf("redis connect: %v", err)
 	}
-	log.Printf("connected to redis at %s", redisAddr)
+	log.Printf("connected to redis at %v", redisAddrs)
 
 	// Postgres for room membership lookups.
 	pg, err := store.NewPostgres(pgDSN)

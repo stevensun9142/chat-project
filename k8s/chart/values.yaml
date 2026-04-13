@@ -47,6 +47,7 @@ imagePullPolicy: Never
 
 redis:
   image: redis:7.2
+  replicas: 1
   storage: 512Mi
   nodePort: 30379
 

@@ -25,7 +25,7 @@ func main() {
 	brokers := strings.Split(requireEnv("KAFKA_BROKERS"), ",")
 	grpcPort := requireEnv("GRPC_PORT")
 	redisRatelimitAddr := requireEnv("REDIS_RATELIMIT_ADDR")
-	redisPresenceAddr := requireEnv("REDIS_PRESENCE_ADDR")
+	redisPresenceAddrs := requireEnv("REDIS_PRESENCE_ADDRS")
 
 	gatewayID := os.Getenv("GATEWAY_ID")
 	if gatewayID == "" {
@@ -48,7 +48,7 @@ func main() {
 	}
 	defer limiter.Close()
 
-	refresher, err := presence.NewRefresher(redisPresenceAddr, gatewayID)
+	refresher, err := presence.NewRefresher(redisPresenceAddrs, gatewayID)
 	if err != nil {
 		log.Fatalf("presence refresher init: %v", err)
 	}

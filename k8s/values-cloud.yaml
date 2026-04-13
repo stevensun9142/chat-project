@@ -82,7 +82,10 @@ cassandra:
   nodePort: 30042
 
 redis:
+redis:
   image: redis:7.2
+  replicas: 6
+  clusterReplicas: 1
   storage: 256Mi
   nodePort: 30379
 

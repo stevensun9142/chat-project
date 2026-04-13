@@ -1,3 +1,112 @@
+{{- $replicas := int (default 1 .Values.redis.replicas) -}}
+{{- if gt $replicas 1 -}}
+# ── Redis Cluster mode ({{ $replicas }} nodes) ──────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  clusterIP: None
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: client
+    - port: 16379
+      targetPort: 16379
+      name: gossip
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+spec:
+  serviceName: redis
+  replicas: {{ $replicas }}
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image }}
+          ports:
+            - containerPort: 6379
+            - containerPort: 16379
+          command: ["redis-server"]
+          args:
+            - "--cluster-enabled"
+            - "yes"
+            - "--cluster-config-file"
+            - "/data/nodes.conf"
+            - "--cluster-node-timeout"
+            - "5000"
+            - "--appendonly"
+            - "yes"
+            - "--maxmemory"
+            - "128mb"
+            - "--maxmemory-policy"
+            - "noeviction"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.redis.storage }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: redis-cluster-init
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: init
+          image: {{ .Values.redis.image }}
+          command: ["sh", "-c"]
+          args:
+            - |
+              echo "Waiting for all Redis nodes..."
+              for i in $(seq 0 {{ sub $replicas 1 }}); do
+                until redis-cli -h redis-${i}.redis ping 2>/dev/null | grep -q PONG; do
+                  echo "  waiting for redis-${i}.redis..."
+                  sleep 2
+                done
+              done
+              echo "All nodes ready. Creating cluster..."
+              redis-cli --cluster create \
+                {{- range $i := until $replicas }}
+                redis-{{ $i }}.redis:6379 \
+                {{- end }}
+                --cluster-replicas {{ .Values.redis.clusterReplicas | default 1 }} --cluster-yes
+{{- else -}}
+# ── Redis single-node mode ──────────────────────────────────────────
 apiVersion: v1
 kind: Service
 metadata:
@@ -53,3 +162,4 @@ spec:
         resources:
           requests:
             storage: {{ .Values.redis.storage }}
+{{- end -}}

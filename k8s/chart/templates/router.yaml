@@ -20,8 +20,8 @@ spec:
           env:
             - name: KAFKA_BROKERS
               value: {{ include "chat.kafkaBrokers" $ | quote }}
-            - name: REDIS_ADDR
-              value: "redis:6379"
+            - name: REDIS_ADDRS
+              value: {{ include "chat.redisPresenceAddrs" $ | quote }}
             - name: PG_DSN
               value: "postgres://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@postgres:5432/{{ .Values.postgres.database }}?sslmode=disable"
             - name: GATEWAY_ADDRS

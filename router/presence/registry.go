@@ -24,10 +24,10 @@ return 0
 
 // Registry maintains user_id → gateway_id mappings in Redis.
 type Registry struct {
-	rdb *redis.Client
+	rdb redis.Cmdable
 }
 
-func NewRegistry(rdb *redis.Client) *Registry {
+func NewRegistry(rdb redis.Cmdable) *Registry {
 	return &Registry{rdb: rdb}
 }
 
