@@ -1,0 +1,16 @@
+<clickhouse>
+    <!-- Limit total server memory to 75% of container RAM -->
+    <max_server_memory_usage_to_ram_ratio>0.75</max_server_memory_usage_to_ram_ratio>
+
+    <!-- Concurrency limits for small instances -->
+    <max_concurrent_queries>8</max_concurrent_queries>
+    <max_connections>64</max_connections>
+
+    <!-- Reduced caches -->
+    <mark_cache_size>268435456</mark_cache_size>           <!-- 256 MB -->
+    <uncompressed_cache_size>16777216</uncompressed_cache_size> <!-- 16 MB -->
+
+    <!-- Disable unused compatibility ports -->
+    <mysql_port remove="1"/>
+    <postgresql_port remove="1"/>
+</clickhouse>

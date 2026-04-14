@@ -45,6 +45,12 @@ ingress:
 jwt:
   secret: CHANGE-ME-IN-PROD
 
+# --- ClickHouse analytics (single node, low-memory tuned) ---
+clickhouse:
+  image: clickhouse/clickhouse-server:24-alpine
+  storage: 10Gi
+  nodePort: 30123
+
 # --- Single Kafka broker (saves ~2GB RAM) ---
 kafka:
   image: apache/kafka:3.7.1

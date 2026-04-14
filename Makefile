@@ -2,7 +2,7 @@ SHELL := /bin/bash
 HELM_CMD = sudo helm --kube-context kind-chat
 KUBECTL_CMD = sudo kubectl --context kind-chat -n chat
 
-.PHONY: deploy upgrade status pods logs-gateway cassandra-schema api gateway frontend test message-worker test-gateway test-message-worker router test-router test-e2e build-gateway build-message-worker build-router build-api build-frontend build-all cloud-build-gateway cloud-build-message-worker cloud-build-router cloud-build-api cloud-build-frontend cloud-build-all cloud-deploy cloud-upgrade deploy-remote
+.PHONY: deploy upgrade status pods logs-gateway cassandra-schema clickhouse-schema api gateway frontend test message-worker test-gateway test-message-worker router test-router test-e2e build-gateway build-message-worker build-router build-api build-frontend build-all cloud-build-gateway cloud-build-message-worker cloud-build-router cloud-build-api cloud-build-frontend cloud-build-all cloud-deploy cloud-upgrade deploy-remote
 
 # First-time install (build images, load into Kind, deploy via Helm)
 deploy: build-all
@@ -23,6 +23,10 @@ status:
 # Load Cassandra schema
 cassandra-schema:
 	$(KUBECTL_CMD) exec -i cassandra-0 -- cqlsh < schema/cassandra/init.cql
+
+# Load ClickHouse analytics schema
+clickhouse-schema:
+	$(KUBECTL_CMD) exec -i clickhouse-0 -- clickhouse-client --multiquery < schema/clickhouse/init.sql
 
 # Run the Python API server locally (port 8000 reserved by Kind NodePort)
 api:

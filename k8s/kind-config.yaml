@@ -41,3 +41,7 @@ nodes:
       - containerPort: 30381
         hostPort: 6381
         protocol: TCP
+      # ClickHouse HTTP
+      - containerPort: 30123
+        hostPort: 8123
+        protocol: TCP

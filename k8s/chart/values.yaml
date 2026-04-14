@@ -62,6 +62,11 @@ redisRatelimit:
 jwt:
   secret: change-me-in-prod
 
+clickhouse:
+  image: clickhouse/clickhouse-server:24-alpine
+  storage: 5Gi
+  nodePort: 30123
+
 kafka:
   image: apache/kafka:3.7.1
   replicas: 3
